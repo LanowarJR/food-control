@@ -1,0 +1,5 @@
+{
+  "name": "FoodControl",
+  "description": "Sistema de Gestão de Refeições e Presença (Lunch Control) integrado ao Supabase.",
+  "requestFramePermissions": []
+}
