@@ -40,7 +40,7 @@ export default function TopBar() {
           <div className="w-10 h-10 rounded-full border-2 border-[#8dd0e9] overflow-hidden cursor-pointer relative">
             <Image 
               src="https://picsum.photos/seed/manager/100/100" 
-              alt="Profile" 
+              alt="Foto de perfil do usuário" 
               fill
               className="object-cover"
               referrerPolicy="no-referrer"

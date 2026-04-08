@@ -6,7 +6,8 @@ import {
   Utensils, 
   Users, 
   Settings, 
-  LayoutDashboard 
+  LayoutDashboard,
+  Database
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -16,6 +17,7 @@ const menuItems = [
   { name: 'Controle Diário', icon: ClipboardCheck, href: '/' },
   { name: 'Histórico de Refeições', icon: Utensils, href: '/historico' },
   { name: 'Gestão de Colaboradores', icon: Users, href: '/gestao' },
+  { name: 'Diagnóstico Supabase', icon: Database, href: '/debug-supabase' },
   { name: 'Configurações', icon: Settings, href: '/configuracoes' },
 ];
 

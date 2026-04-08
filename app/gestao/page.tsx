@@ -13,26 +13,67 @@ import {
   UserMinus,
   ChevronLeft,
   ChevronRight,
-  HardHat
+  HardHat,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
 import Image from 'next/image';
-
-const stats = [
-  { label: 'Total de Colaboradores', value: '522', icon: HardHat, color: 'text-teal-600' },
-  { label: 'Motoristas Ativos', value: '48', icon: Truck, color: 'text-cyan-600' },
-  { label: 'Contratos Vencendo', value: '12', icon: AlertCircle, color: 'text-amber-500' },
-];
-
-const employees = [
-  { name: 'Ricardo Mendes', role: 'Motorista Categoria D', costCenter: 'LOG-FAC-01', status: 'Ativo', avatar: 'https://picsum.photos/seed/ricardo/100/100' },
-  { name: 'Ana Paula Silva', role: 'Prestadora de Serviços', costCenter: 'ADM-FAC-04', status: 'Ativo', avatar: 'https://picsum.photos/seed/ana/100/100' },
-  { name: 'Carlos Ferreira', role: 'Manutenção Hidráulica', costCenter: 'MAN-FAC-12', status: 'Inativo', avatar: 'https://picsum.photos/seed/carlos/100/100' },
-  { name: 'João Victor Rocha', role: 'Operador de Empilhadeira', costCenter: 'LOG-FAC-01', status: 'Ativo', avatar: 'https://picsum.photos/seed/joao/100/100' },
-];
+import { supabase } from '@/lib/supabase';
 
 export default function GestaoPage() {
+  const [employees, setEmployees] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const fetchEmployees = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('collaborators')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) {
+        // Tenta buscar por 'nome' se 'name' não existir
+        const { data: dataAlt, error: errorAlt } = await supabase
+          .from('collaborators')
+          .select('*')
+          .order('nome', { ascending: true });
+        
+        if (errorAlt) throw errorAlt;
+        
+        const mappedData = (dataAlt || []).map(emp => ({
+          ...emp,
+          nome: emp.name || emp.nome || 'Sem Nome',
+          centro_custo: emp.cost_center || emp.centro_custo || 'Não Alocado'
+        }));
+        setEmployees(mappedData);
+      } else {
+        const mappedData = (data || []).map(emp => ({
+          ...emp,
+          nome: emp.name || emp.nome || 'Sem Nome',
+          centro_custo: emp.cost_center || emp.centro_custo || 'Não Alocado'
+        }));
+        setEmployees(mappedData);
+      }
+    } catch (err: any) {
+      console.error('Erro ao buscar colaboradores:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchEmployees();
+  }, [fetchEmployees]);
+
+  const stats = [
+    { label: 'Total de Colaboradores', value: employees.length.toString(), icon: HardHat, color: 'text-teal-600' },
+    { label: 'Ativos Agora', value: employees.filter(e => e.status === 'Ativo').length.toString(), icon: Users, color: 'text-cyan-600' },
+    { label: 'Pendências', value: '0', icon: AlertCircle, color: 'text-amber-500' },
+  ];
+
   return (
     <Layout>
       {/* Header Actions */}
@@ -42,9 +83,12 @@ export default function GestaoPage() {
           <p className="text-slate-500 mt-1">Gerencie motoristas, prestadores e equipe industrial de Facility A.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-slate-200 rounded-xl text-slate-700 font-semibold text-sm hover:bg-slate-300 transition-all">
-            <Filter className="w-4 h-4" />
-            Filtrar Ativos
+          <button 
+            onClick={fetchEmployees}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-200 rounded-xl text-slate-700 font-semibold text-sm hover:bg-slate-300 transition-all"
+          >
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            Atualizar
           </button>
           <button className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-br from-[#004354] to-[#005c72] text-white rounded-xl shadow-lg hover:opacity-90 transition-all font-semibold text-sm">
             <Plus className="w-4 h-4" />
@@ -52,6 +96,12 @@ export default function GestaoPage() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl text-sm">
+          <strong>Erro ao carregar dados:</strong> {error}. Verifique se a tabela <code>colaboradores</code> existe no Supabase.
+        </div>
+      )}
 
       {/* Bento Grid Layout for Stats and Main Table */}
       <div className="grid grid-cols-12 gap-6">
@@ -64,14 +114,6 @@ export default function GestaoPage() {
               <p className="text-xs font-inter font-bold uppercase tracking-widest text-slate-500">{stat.label}</p>
             </div>
           ))}
-          
-          <div className="bg-white rounded-xl p-6 border border-slate-200/50 shadow-sm">
-            <p className="text-xs font-bold text-[#004354] mb-1">Capacidade</p>
-            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-              <div className="bg-teal-500 h-full w-[84%]"></div>
-            </div>
-            <p className="text-[10px] text-slate-400 mt-2">84% dos contratos ativos</p>
-          </div>
         </div>
 
         {/* Table Area */}
@@ -86,59 +128,66 @@ export default function GestaoPage() {
             </div>
 
             {/* List Items */}
-            <div className="divide-y divide-slate-100">
-              {employees.map((emp, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-slate-50 transition-colors group">
-                  <div className="col-span-5 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200/50 relative">
-                      <Image 
-                        className="object-cover" 
-                        src={emp.avatar} 
-                        alt={emp.name} 
-                        fill
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#111d23] text-sm">{emp.name}</p>
-                      <p className="text-xs text-slate-500">{emp.role}</p>
-                    </div>
-                  </div>
-                  <div className="col-span-3">
-                    <span className="px-3 py-1 bg-[#f4faff] rounded-lg text-xs font-medium text-[#004354] border border-[#004354]/10">
-                      {emp.costCenter}
-                    </span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className={cn(
-                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-tighter",
-                      emp.status === 'Ativo' ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"
-                    )}>
-                      {emp.status}
-                    </span>
-                  </div>
-                  <div className="col-span-2 flex justify-end gap-2">
-                    <button className="p-2 text-slate-400 hover:text-[#004354] transition-colors hover:bg-slate-100 rounded-lg">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button className="p-2 text-slate-400 hover:text-red-500 transition-colors hover:bg-slate-100 rounded-lg">
-                      <UserMinus className="w-4 h-4" />
-                    </button>
-                  </div>
+            <div className="divide-y divide-slate-100 min-h-[200px]">
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw className="w-8 h-8 text-[#004354] animate-spin opacity-20" />
                 </div>
-              ))}
+              ) : employees.length === 0 ? (
+                <div className="text-center py-20 text-slate-400">
+                  Nenhum colaborador encontrado na tabela <code>colaboradores</code>.
+                </div>
+              ) : (
+                employees.map((emp, idx) => (
+                  <div key={emp.id || idx} className="grid grid-cols-12 gap-4 px-6 py-5 items-center hover:bg-slate-50 transition-colors group">
+                    <div className="col-span-5 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center overflow-hidden border border-slate-200/50 relative">
+                        <Image 
+                          className="object-cover" 
+                          src={emp.avatar_url || `https://picsum.photos/seed/${emp.id}/100/100`} 
+                          alt={emp.nome || 'Foto do colaborador'} 
+                          fill
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-[#111d23] text-sm">{emp.nome}</p>
+                        <p className="text-xs text-slate-500">{emp.cargo || 'Colaborador'}</p>
+                      </div>
+                    </div>
+                    <div className="col-span-3">
+                      <span className="px-3 py-1 bg-[#f4faff] rounded-lg text-xs font-medium text-[#004354] border border-[#004354]/10">
+                        {emp.centro_custo || 'N/A'}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className={cn(
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-tighter",
+                        emp.status === 'Ativo' ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"
+                      )}>
+                        {emp.status || 'Inativo'}
+                      </span>
+                    </div>
+                    <div className="col-span-2 flex justify-end gap-2">
+                      <button className="p-2 text-slate-400 hover:text-[#004354] transition-colors hover:bg-slate-100 rounded-lg">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button className="p-2 text-slate-400 hover:text-red-500 transition-colors hover:bg-slate-100 rounded-lg">
+                        <UserMinus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Pagination / Footer */}
             <div className="px-6 py-4 border-t border-slate-200/50 flex items-center justify-between bg-slate-50/30">
-              <span className="text-xs text-slate-500">Mostrando 1-4 de 522 colaboradores</span>
+              <span className="text-xs text-slate-500">Mostrando {employees.length} colaboradores</span>
               <div className="flex gap-2">
                 <button className="p-1.5 rounded-lg border border-slate-200/50 text-slate-500 hover:bg-white transition-colors">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <button className="px-3 py-1 rounded-lg bg-[#004354] text-white text-xs font-bold shadow-sm">1</button>
-                <button className="px-3 py-1 rounded-lg hover:bg-white text-xs text-slate-600 border border-transparent hover:border-slate-200/50">2</button>
-                <button className="px-3 py-1 rounded-lg hover:bg-white text-xs text-slate-600 border border-transparent hover:border-slate-200/50">3</button>
                 <button className="p-1.5 rounded-lg border border-slate-200/50 text-slate-500 hover:bg-white transition-colors">
                   <ChevronRight className="w-4 h-4" />
                 </button>

@@ -1,19 +1,60 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '@/components/Layout';
 import { 
   History, 
   UtensilsCrossed, 
   Send, 
   Save,
-  MessageCircle
+  MessageCircle,
+  RefreshCw
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { cn } from '@/lib/utils';
 
 export default function PedidosPage() {
-  const [costelinha, setCostelinha] = useState(12);
-  const [frango, setFrango] = useState(4);
+  const [costCenters, setCostCenters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [costelinha, setCostelinha] = useState(0);
+  const [frango, setFrango] = useState(0);
   const [obs, setObs] = useState('');
+
+  const fetchCostCenters = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) {
+        // Tenta buscar por 'nome' se 'name' não existir
+        const { data: dataAlt, error: errorAlt } = await supabase
+          .from('contracts')
+          .select('*')
+          .order('nome', { ascending: true });
+        
+        if (errorAlt) throw errorAlt;
+        setCostCenters(dataAlt || []);
+      } else {
+        setCostCenters(data || []);
+      }
+      
+      // Mock de cálculo baseado nos centros de custo
+      const count = data?.length || 0;
+      setCostelinha(count * 12);
+      setFrango(count * 4);
+    } catch (err: any) {
+      console.error('Erro ao buscar contratos:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCostCenters();
+  }, [fetchCostCenters]);
 
   const total = costelinha + frango;
 
@@ -33,9 +74,12 @@ export default function PedidosPage() {
             <p className="text-slate-500">Resumo final e consolidação para o fornecedor.</p>
           </div>
           <div className="flex gap-3">
-            <button className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-inter font-bold text-xs uppercase tracking-widest hover:bg-slate-300 transition-colors flex items-center gap-2">
-              <History className="w-4 h-4" />
-              Ver Histórico
+            <button 
+              onClick={fetchCostCenters}
+              className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-inter font-bold text-xs uppercase tracking-widest hover:bg-slate-300 transition-colors flex items-center gap-2"
+            >
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+              Atualizar
             </button>
           </div>
         </div>
@@ -53,20 +97,30 @@ export default function PedidosPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#004354]"></span>
               Resumo por Centro de Custo
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Total Consolidado</p>
-                <p className="text-4xl font-manrope font-extrabold text-[#004354]">{total} <span className="text-lg font-medium text-slate-400">UND</span></p>
+            
+            {loading ? (
+              <div className="flex justify-center py-10">
+                <RefreshCw className="w-8 h-8 text-[#004354] animate-spin opacity-20" />
               </div>
-              <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Setor Telhado</p>
-                <p className="text-4xl font-manrope font-extrabold text-cyan-700">15 <span className="text-lg font-medium text-slate-400">UND</span></p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
+                  <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Total Consolidado</p>
+                  <p className="text-4xl font-manrope font-extrabold text-[#004354]">{total} <span className="text-lg font-medium text-slate-400">UND</span></p>
+                </div>
+                {costCenters.slice(0, 2).map((cc, idx) => (
+                  <div key={cc.id} className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
+                    <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">{cc.nome}</p>
+                    <p className={cn(
+                      "text-4xl font-manrope font-extrabold",
+                      idx === 0 ? "text-cyan-700" : "text-teal-700"
+                    )}>
+                      {Math.floor(total / (idx + 2))} <span className="text-lg font-medium text-slate-400">UND</span>
+                    </p>
+                  </div>
+                ))}
               </div>
-              <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Setor Predial</p>
-                <p className="text-4xl font-manrope font-extrabold text-teal-700">1 <span className="text-lg font-medium text-slate-400">UND</span></p>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Specific Items Grid */}
