@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { ShoppingCart, Calendar, Bell, User, Menu } from 'lucide-react';
+import { ShoppingCart, Menu, Bell, LogOut } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
@@ -13,6 +15,14 @@ interface TopBarProps {
 }
 
 export default function TopBar({ toggleMobileMenu }: TopBarProps) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    if (confirm('Deseja realmente sair do sistema?')) {
+      await supabase.auth.signOut();
+      router.push('/login');
+    }
+  };
   const today = new Date();
   const formattedDate = format(today, "dd 'de' MMMM", { locale: ptBR });
 
@@ -49,8 +59,12 @@ export default function TopBar({ toggleMobileMenu }: TopBarProps) {
         </Link>
 
         <div className="flex items-center gap-2 md:gap-4">
-          <button className="hidden sm:flex text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-full transition-colors">
-            <Bell className="w-5 h-5" />
+          <button 
+            onClick={handleLogout}
+            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+            title="Sair do Sistema"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
           
           <div className="w-9 h-9 md:w-10 md:h-10 rounded-full border-2 border-[#b7eaff] overflow-hidden cursor-pointer relative shadow-sm">

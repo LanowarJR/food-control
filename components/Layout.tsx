@@ -1,15 +1,67 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import BottomBar from './BottomBar';
+import { supabase } from '@/lib/supabase';
+import { useRouter, usePathname } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const closeSidebar = () => setIsSidebarOpen(false);
+
+  useEffect(() => {
+    const getInitialSession = async () => {
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      setSession(initialSession);
+      
+      if (!initialSession && pathname !== '/login') {
+        router.push('/login');
+      }
+      setLoading(false);
+    };
+
+    getInitialSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session && pathname !== '/login') {
+        router.push('/login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [pathname, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 text-[#004354] animate-spin opacity-20" />
+      </div>
+    );
+  }
+
+  // Se não estiver logado e não estiver na página de login, não renderiza nada (o useEffect vai redirecionar)
+  if (!session && pathname !== '/login') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 text-[#004354] animate-spin opacity-20" />
+      </div>
+    );
+  }
+
+  // Se for a página de login, renderiza apenas o conteúdo sem casca do Layout
+  if (pathname === '/login') {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
