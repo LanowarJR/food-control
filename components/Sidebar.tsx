@@ -7,7 +7,8 @@ import {
   Users, 
   Settings, 
   LayoutDashboard,
-  Coffee
+  Coffee,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -21,12 +22,21 @@ const menuItems = [
   { name: 'Configurações', icon: Settings, href: '/configuracoes' },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen: boolean;
+  closeSidebar: () => void;
+}
+
+export default function Sidebar({ isOpen, closeSidebar }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex fixed left-0 top-16 h-[calc(100vh-4rem-3.5rem)] w-64 bg-[#f1f5f9] border-r border-slate-200/50 flex-col py-6 z-30">
-      <div className="px-6 mb-8">
+    <aside className={cn(
+      "fixed left-0 top-0 md:top-16 h-full md:h-[calc(100vh-4rem-3.5rem)] w-64 bg-[#f1f5f9] border-r border-slate-200/50 flex flex-col py-6 z-30 transition-transform duration-300 ease-in-out",
+      isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+    )}>
+      {/* Header na Sidebar (Versão Mobile) */}
+      <div className="px-6 mb-8 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-[#004354] rounded-lg flex items-center justify-center text-white font-bold">
             FC
@@ -36,6 +46,14 @@ export default function Sidebar() {
             <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Gestão Central</p>
           </div>
         </div>
+        
+        {/* Botão Fechar no Mobile */}
+        <button 
+          onClick={closeSidebar}
+          className="p-2 -mr-2 text-slate-400 hover:text-slate-600 md:hidden"
+        >
+          <X className="w-6 h-6" />
+        </button>
       </div>
 
       <nav className="flex-1 px-2 space-y-1">
@@ -45,8 +63,9 @@ export default function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              onClick={closeSidebar}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg mx-2 transition-all text-sm font-medium",
+                "flex items-center gap-3 px-4 py-3 rounded-xl mx-2 transition-all text-sm font-bold",
                 isActive 
                   ? "bg-white text-[#004354] shadow-sm translate-x-1" 
                   : "text-slate-600 hover:bg-slate-200 hover:text-[#004354]"
@@ -60,11 +79,11 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-6 mt-auto">
-        <div className="bg-white/50 p-4 rounded-xl border border-slate-200/50">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Status da Unidade</p>
+        <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-slate-200/50 shadow-sm">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Unidade Logística</p>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-teal-500 rounded-full"></span>
-            <span className="text-xs font-semibold text-[#004354]">Operacional</span>
+            <span className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse"></span>
+            <span className="text-xs font-black text-[#004354] uppercase">Sistema Online</span>
           </div>
         </div>
       </div>

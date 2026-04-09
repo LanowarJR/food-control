@@ -239,8 +239,54 @@ export default function HistoricoPage() {
         </div>
       </div>
 
-      {/* Detailed History Table */}
-      <div className="bg-white rounded-2xl overflow-hidden border border-slate-200/50 shadow-[0px_20px_40px_rgba(17,29,35,0.02)]">
+      {/* Mobile Card List (Visible on < md) */}
+      <div className="md:hidden space-y-4 mb-10">
+        {loading ? (
+          <div className="py-24 text-center">
+            <RefreshCw className="w-10 h-10 text-[#004354] animate-spin mx-auto opacity-10" />
+          </div>
+        ) : filteredData.length === 0 ? (
+          <div className="py-24 text-center text-slate-400 font-bold bg-white rounded-2xl border border-slate-200">
+            Nenhum lançamento encontrado.
+          </div>
+        ) : (
+          filteredData.map((item, idx) => (
+            <div key={idx} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/50">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Data do Lançamento</p>
+                  <p className="text-sm font-black text-[#111d23]">{new Date(item.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}</p>
+                </div>
+                <span className={cn(
+                  "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+                  item.status === 'Validated' ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-800"
+                )}>
+                  {item.status === 'Validated' ? 'Validado' : 'Pendente'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Refeições</p>
+                  <p className="text-lg font-black text-[#004354]">{item.meals} <span className="text-[10px]">UND</span></p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">C. Custo</p>
+                  <p className="text-[10px] font-black text-teal-700 truncate">{item.cost_center || 'Geral'}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Observações do Dia</p>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed italic">"{item.obs}"</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Detailed History Table (Hidden on < md) */}
+      <div className="hidden md:block bg-white rounded-2xl overflow-hidden border border-slate-200/50 shadow-[0px_20px_40px_rgba(17,29,35,0.02)]">
         <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
           <div>
             <h3 className="font-manrope text-lg font-bold text-[#111d23]">Extrato de Lançamentos</h3>
@@ -315,6 +361,8 @@ export default function HistoricoPage() {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Desktop */}
         <div className="px-8 py-6 bg-slate-50/30 flex justify-between items-center border-t border-slate-100">
           <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Snapshot: {filteredData.length} entradas</p>
           <div className="flex gap-2">

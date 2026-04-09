@@ -283,41 +283,41 @@ export default function DailyControl() {
   return (
     <Layout>
       {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-[#111d23] tracking-tight font-manrope">Controle Diário</h1>
-          <p className="text-slate-500 font-medium mt-1">Gestão de presença por data e registro inteligente.</p>
+          <h1 className="text-2xl md:text-3xl font-black text-[#111d23] tracking-tight font-manrope">Controle Diário</h1>
+          <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Gestão de presença por data e registro inteligente.</p>
         </div>
-        <div className="flex flex-wrap gap-2 md:gap-3">
-          <div className="flex items-center gap-2 bg-white px-4 py-2 text-slate-700 rounded-xl border border-slate-200/50 shadow-sm">
+        <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
+          <div className="flex-1 md:flex-none flex items-center gap-2 bg-white px-4 py-2.5 text-slate-700 rounded-xl border border-slate-200/50 shadow-sm transition-all focus-within:ring-2 focus-within:ring-[#004354]/10">
             <Calendar className="w-4 h-4 text-[#004354]" />
             <input 
               type="date" 
               value={currentDate}
               onChange={(e) => setCurrentDate(e.target.value)}
-              className="bg-transparent border-none outline-none font-bold text-sm cursor-pointer"
+              className="bg-transparent border-none outline-none font-bold text-xs md:text-sm cursor-pointer w-full"
             />
           </div>
           <button 
             onClick={fetchDailyData}
-            className="bg-white px-4 py-2 text-slate-700 rounded-xl flex items-center gap-2 border border-slate-200/50 shadow-sm hover:bg-slate-50 transition-colors"
+            className="p-3 bg-white text-slate-700 rounded-xl flex items-center justify-center border border-slate-200/50 shadow-sm hover:bg-slate-50 transition-colors"
           >
             <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
           </button>
           <button 
              onClick={() => setIsExtraOpen(true)}
-             className="bg-white px-4 py-2 text-[#004354] rounded-xl flex items-center gap-2 border border-[#004354]/20 shadow-sm hover:bg-slate-50 transition-colors font-bold text-sm"
+             className="flex-1 md:flex-none px-4 py-2 bg-white text-[#004354] rounded-xl flex items-center justify-center gap-2 border border-[#004354]/20 shadow-sm hover:bg-slate-50 transition-colors font-bold text-xs md:text-sm"
           >
              <Plus className="w-4 h-4" />
-             <span className="hidden md:inline">Refeição Extra</span>
+             <span>Extra</span>
           </button>
           <button 
             onClick={handleImportYesterday}
             disabled={importing}
-            className="bg-[#004354] px-4 py-2 text-white rounded-xl flex items-center gap-2 shadow-md cursor-pointer hover:bg-[#005c72] transition-colors disabled:opacity-50"
+            className="w-full md:w-auto bg-[#004354] px-4 py-3 md:py-2 text-white rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer hover:bg-[#005c72] transition-colors disabled:opacity-50"
           >
             <Download className={cn("w-4 h-4", importing && "animate-bounce")} />
-            <span className="text-sm font-bold">Puxar Ontem</span>
+            <span className="text-sm font-bold">Puxar de Ontem</span>
           </button>
         </div>
       </div>
@@ -329,39 +329,35 @@ export default function DailyControl() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total</p>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-bold text-[#004354] font-manrope">{stats.total}</span>
-            <span className="text-teal-600 text-xs font-bold mb-1.5 flex items-center">
-              Colaboradores/Extras
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/50">
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total</p>
+          <div className="flex flex-col md:flex-row md:items-end md:gap-2">
+            <span className="text-2xl md:text-4xl font-black text-[#004354] font-manrope">{stats.total}</span>
+            <span className="text-teal-600 text-[10px] font-bold mb-1 flex items-center">
+              Pessoas
             </span>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Presentes</p>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-bold text-teal-700 font-manrope">{stats.presentes}</span>
-            <span className="text-slate-400 text-xs font-medium mb-1.5">de {stats.total}</span>
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/50 border-b-4 border-b-teal-500">
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Presentes</p>
+          <div className="flex flex-col md:flex-row md:items-end md:gap-2">
+            <span className="text-2xl md:text-4xl font-black text-teal-700 font-manrope">{stats.presentes}</span>
+            <span className="text-slate-400 text-[10px] font-medium mb-1">de {stats.total}</span>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Faltas</p>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-bold text-red-500 font-manrope">{stats.faltas.toString().padStart(2, '0')}</span>
-            <div className="flex flex-col mb-1">
-              <span className="text-[10px] font-bold text-red-500 uppercase">Não Compareceu</span>
-            </div>
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/50 border-b-4 border-b-red-400">
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Faltas</p>
+          <div className="flex flex-col md:flex-row md:items-end md:gap-2">
+            <span className="text-2xl md:text-4xl font-black text-red-500 font-manrope">{stats.faltas.toString().padStart(2, '0')}</span>
+            <span className="text-red-300 text-[10px] font-bold uppercase mb-1">Inativo</span>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outros Status</p>
-          <div className="flex items-end gap-2">
-            <span className="text-4xl font-bold text-purple-500 font-manrope">{stats.outros.toString().padStart(2, '0')}</span>
-            <div className="flex flex-col mb-1">
-              <span className="text-[10px] font-bold text-purple-500 uppercase">Licenças / Custom</span>
-            </div>
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200/50">
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Outros</p>
+          <div className="flex flex-col md:flex-row md:items-end md:gap-2">
+            <span className="text-2xl md:text-4xl font-black text-purple-500 font-manrope">{stats.outros.toString().padStart(2, '0')}</span>
+            <span className="text-purple-300 text-[10px] font-bold uppercase mb-1">Licença</span>
           </div>
         </div>
       </div>
@@ -392,8 +388,104 @@ export default function DailyControl() {
         </div>
       </div>
 
-      {/* Table Section */}
-      <div className="bg-white rounded-2xl overflow-hidden shadow-[0px_20px_40px_rgba(17,29,35,0.04)] border border-slate-200/50">
+      {/* Mobile Card List (Visible on < md) */}
+      <div className="md:hidden space-y-3 mb-10">
+        {loading ? (
+          <div className="py-20 text-center">
+            <RefreshCw className="w-8 h-8 text-[#004354] animate-spin mx-auto opacity-20" />
+          </div>
+        ) : employees.length === 0 ? (
+          <div className="py-20 text-center text-slate-400 font-bold bg-white rounded-2xl border border-slate-200">
+            Nenhum colaborador encontrado.
+          </div>
+        ) : (
+          employees
+            .filter(emp => {
+              if (searchQuery && !emp.nome.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+              if (statusFilter !== 'Todos') {
+                if (statusFilter === 'Custom' && ['Presente', 'Falta', 'Atraso'].includes(emp.status_presenca)) return false;
+                if (statusFilter !== 'Custom' && emp.status_presenca !== statusFilter) return false;
+              }
+              return true;
+            })
+            .map((emp) => {
+              const isCustom = !['Presente', 'Falta', 'Atraso', 'Férias', 'Atestado'].includes(emp.status_presenca);
+              const isExtra = emp.initials === 'EX';
+
+              return (
+                <div key={emp.nome} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/50">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center font-black text-xs",
+                        isExtra ? "bg-purple-100 text-purple-700" : "bg-[#b7eaff] text-[#004354]"
+                      )}>
+                        {emp.initials}
+                      </div>
+                      <div className="max-w-[160px]">
+                        <p className="text-sm font-black text-[#111d23] leading-tight break-words">
+                          {emp.nome}
+                        </p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight mt-0.5">
+                          {emp.centro_custo}
+                        </p>
+                      </div>
+                    </div>
+                    <button className="text-slate-300">
+                       <MoreVertical className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <select
+                      value={isCustom ? 'custom_mapped' : emp.status_presenca}
+                      onChange={(e) => handleStatusChange(emp.nome, emp.status_presenca, e.target.value)}
+                      disabled={updatingId === emp.nome}
+                      className={cn(
+                        "flex-1 px-4 py-2.5 rounded-xl text-[11px] font-black uppercase border border-slate-100 shadow-sm text-center appearance-none",
+                        emp.status_presenca === 'Presente' ? "bg-teal-50 text-teal-700" :
+                        emp.status_presenca === 'Atraso' ? "bg-amber-50 text-amber-700" :
+                        emp.status_presenca === 'Falta' ? "bg-red-50 text-red-600" :
+                        "bg-purple-50 text-purple-700",
+                        updatingId === emp.nome && "opacity-50"
+                      )}
+                    >
+                      <option value="Presente">Presente</option>
+                      <option value="Atraso">Atraso</option>
+                      <option value="Falta">Falta</option>
+                      <option value="Férias">Férias</option>
+                      <option value="Atestado">Atestado</option>
+                      {isCustom && <option value="custom_mapped">{emp.status_presenca}</option>}
+                      <option value="custom">+ Novo</option>
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      className={cn(
+                        "w-full bg-slate-50 border-none rounded-lg text-xs text-slate-600 p-3 outline-none focus:ring-1 focus:ring-teal-500/20",
+                        updatingId === emp.nome && "opacity-50"
+                      )}
+                      placeholder="Observação rápida..."
+                      defaultValue={emp.comment}
+                      onBlur={(e) => {
+                        if (e.target.value !== emp.comment) {
+                          updateEmployeeAttendance(emp.nome, 'comment', e.target.value);
+                        }
+                      }}
+                      disabled={updatingId === emp.nome}
+                    />
+                    {updatingId === emp.nome && <RefreshCw className="absolute right-3 top-3 w-3 h-3 text-teal-600 animate-spin" />}
+                  </div>
+                </div>
+              );
+            })
+        )}
+      </div>
+
+      {/* Desktop Table Section (Hidden on < md) */}
+      <div className="hidden md:block bg-white rounded-2xl overflow-hidden shadow-[0px_20px_40px_rgba(17,29,35,0.04)] border border-slate-200/50">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -516,7 +608,7 @@ export default function DailyControl() {
           </table>
         </div>
         
-        {/* Pagination */}
+        {/* Pagination Desktop */}
         <div className="px-6 py-4 bg-slate-50/30 flex justify-between items-center border-t border-slate-100">
           <p className="text-xs text-slate-400 font-medium tracking-tight">
             Vendo o snapshot do dia <strong className="text-slate-600">{currentDate}</strong>

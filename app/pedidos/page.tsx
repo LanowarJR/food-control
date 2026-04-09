@@ -158,19 +158,19 @@ export default function PedidosPage() {
 
   return (
     <Layout>
-      <header className="mb-10">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <header className="mb-8 md:mb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-extrabold text-[#111d23] font-manrope tracking-tight mb-2">Fechamento do Pedido</h1>
-            <p className="text-slate-500">Resumo final em tempo real dos Presentes e consolidação.</p>
+            <h1 className="text-2xl md:text-3xl font-black text-[#111d23] font-manrope tracking-tight mb-1">Fechamento do Pedido</h1>
+            <p className="text-xs md:text-sm text-slate-500 font-medium">Resumo em tempo real dos Presentes e consolidação.</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 w-full md:w-auto">
             <button 
               onClick={fetchRealData}
-              className="bg-white text-slate-700 px-5 py-2.5 rounded-xl border border-slate-200/50 shadow-sm font-inter font-bold text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2"
+              className="flex-1 md:flex-none justify-center bg-white text-slate-700 px-5 py-3 md:py-2.5 rounded-xl border border-slate-200/50 shadow-sm font-inter font-bold text-[10px] md:text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2"
             >
               <RefreshCw className={cn("w-4 h-4 text-[#004354]", loading && "animate-spin")} />
-              Atualizar Matemática
+              Recalcular
             </button>
           </div>
         </div>
@@ -188,12 +188,12 @@ export default function PedidosPage() {
           )}
 
           {/* Totals Breakdown */}
-          <div className="bg-white p-8 rounded-xl shadow-[0px_20px_40px_rgba(17,29,35,0.04)] relative overflow-hidden border border-slate-200/50">
+          <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm relative overflow-hidden border border-slate-200/50">
             <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-              <UtensilsCrossed className="w-24 h-24" />
+              <UtensilsCrossed className="w-16 md:w-24 h-16 md:h-24" />
             </div>
             
-            <h3 className="text-slate-400 font-manrope font-bold text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
+            <h3 className="text-slate-400 font-manrope font-bold text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#004354]"></span>
               Leitura em Tempo Real (Painel Diário)
             </h3>
@@ -203,12 +203,12 @@ export default function PedidosPage() {
                 <RefreshCw className="w-8 h-8 text-[#004354] animate-spin opacity-20" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 
                 {/* Total Geral de Presentes */}
-                <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                  <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Pessoas em Campo (Presente)</p>
-                  <p className="text-4xl font-manrope font-extrabold text-[#004354]">{totalPresentes} <span className="text-lg font-medium text-slate-400">UND</span></p>
+                <div className="col-span-2 lg:col-span-1 bg-teal-50/50 p-6 rounded-2xl border border-teal-100 shadow-sm">
+                  <p className="text-teal-600 font-inter text-[10px] font-black uppercase tracking-widest mb-1">Pessoas em Campo</p>
+                  <p className="text-4xl font-manrope font-black text-[#004354]">{totalPresentes} <span className="text-xs font-bold text-teal-600 opacity-60">UND</span></p>
                 </div>
 
                 {/* Subdivisões por contrato */}
