@@ -84,7 +84,7 @@ export default function LoginPage() {
             <ChefHat className="w-10 h-10 text-white" />
           </div>
           <h1 className="text-4xl font-black text-[#111d23] tracking-tighter font-manrope">FoodControl</h1>
-          <p className="text-slate-500 font-medium mt-2">Gestão de Presença e Insumos Industriais</p>
+          <p className="text-slate-500 font-medium mt-2">Gestão diária de Presença e Refeições</p>
         </div>
 
         {/* Login Card */}
