@@ -7,7 +7,7 @@ import {
   Users, 
   Settings, 
   LayoutDashboard,
-  Database
+  Coffee
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
 
 const menuItems = [
   { name: 'Controle Diário', icon: ClipboardCheck, href: '/' },
+  { name: 'Insumos & Extras', icon: Coffee, href: '/extras' },
   { name: 'Histórico de Refeições', icon: Utensils, href: '/historico' },
   { name: 'Gestão de Colaboradores', icon: Users, href: '/gestao' },
-  { name: 'Diagnóstico Supabase', icon: Database, href: '/debug-supabase' },
   { name: 'Configurações', icon: Settings, href: '/configuracoes' },
 ];
 
@@ -33,7 +33,7 @@ export default function Sidebar() {
           </div>
           <div>
             <h2 className="text-lg font-black text-[#004354] leading-tight font-manrope">FoodControl</h2>
-            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Industrial Facility A</p>
+            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Gestão Central</p>
           </div>
         </div>
       </div>

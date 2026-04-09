@@ -15,7 +15,7 @@ export default function TopBar() {
   return (
     <header className="fixed top-0 w-full z-40 bg-white/85 backdrop-blur-md h-16 flex justify-between items-center px-6 border-b border-slate-200/50">
       <div className="flex items-center gap-4">
-        <span className="text-xl font-bold text-[#004354] tracking-tighter font-manrope">Architectural Ledger</span>
+        <span className="text-xl font-bold text-[#004354] tracking-tighter font-manrope">Painel de Controle</span>
         <div className="h-6 w-[1px] bg-slate-200 mx-2"></div>
         <span className="font-manrope text-sm font-semibold tracking-tight text-[#004354]">{formattedDate}</span>
       </div>
@@ -42,6 +42,7 @@ export default function TopBar() {
               src="https://picsum.photos/seed/manager/100/100" 
               alt="Foto de perfil do usuário" 
               fill
+              sizes="40px"
               className="object-cover"
               referrerPolicy="no-referrer"
             />

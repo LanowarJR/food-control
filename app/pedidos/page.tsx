@@ -14,72 +14,163 @@ import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 
 export default function PedidosPage() {
-  const [costCenters, setCostCenters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [costelinha, setCostelinha] = useState(0);
-  const [frango, setFrango] = useState(0);
+  const [saving, setSaving] = useState(false);
+  
+  // Real Data State
+  const [totalPresentes, setTotalPresentes] = useState(0);
+  const [agrupamento, setAgrupamento] = useState<{name: string, count: number}[]>([]);
+
+  // Menu State
+  const [prot1Name, setProt1Name] = useState('Proteína Principal');
+  const [prot1Qty, setProt1Qty] = useState(0);
+  
+  const [prot2Name, setProt2Name] = useState('Proteína Leve');
+  const [prot2Qty, setProt2Qty] = useState(0);
+  
   const [obs, setObs] = useState('');
 
-  const fetchCostCenters = useCallback(async () => {
+  const fetchRealData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('contracts')
-        .select('*')
-        .order('name', { ascending: true });
+      const today = new Date().toISOString().split('T')[0];
 
-      if (error) {
-        // Tenta buscar por 'nome' se 'name' não existir
-        const { data: dataAlt, error: errorAlt } = await supabase
-          .from('contracts')
-          .select('*')
-          .order('nome', { ascending: true });
-        
-        if (errorAlt) throw errorAlt;
-        setCostCenters(dataAlt || []);
-      } else {
-        setCostCenters(data || []);
-      }
+      // 1. Fetch base collaborators
+      const { data: colabData, error: colabError } = await supabase.from('collaborators').select('*');
+      if (colabError) throw colabError;
+
+      // Deduplicate base (mesma lógica do dashboard principal)
+      const dedupMap = new Map();
+      (colabData || []).forEach(emp => {
+        const nome = emp.nome || emp.name || 'Sem Nome';
+        if (!dedupMap.has(nome)) dedupMap.set(nome, { nome });
+      });
+      const uniqueColabs = Array.from(dedupMap.values());
+
+      // 2. Fetch presenças e status do dia
+      const { data: attendanceData, error: attError } = await supabase
+        .from('daily_attendance')
+        .select('*')
+        .eq('date', today);
+      if (attError && attError.code !== '42P01') throw attError;
       
-      // Mock de cálculo baseado nos centros de custo
-      const count = data?.length || 0;
-      setCostelinha(count * 12);
-      setFrango(count * 4);
+      const attendanceMap = new Map();
+      (attendanceData || []).forEach(att => {
+        attendanceMap.set(att.collaborator_name, att);
+      });
+
+      // 3. Cruzamento e descoberta dos Presentes REAIS (Implícitos + Mapeados + Extras)
+      const nomesPresentes = new Set<string>();
+
+      // A) Varre base fixa: se o status salvo for 'Presente' ou se NÃO tiver salvo nada (default Presente)
+      uniqueColabs.forEach(emp => {
+        const att = attendanceMap.get(emp.nome);
+        const statusAtual = att?.status || 'Presente';
+        if (statusAtual === 'Presente') nomesPresentes.add(emp.nome);
+      });
+
+      // B) Varre os Avulsos/Extras: pessoas no attendanceMap que não estão na base fixa
+      attendanceMap.forEach(att => {
+        if (!dedupMap.has(att.collaborator_name) && att.status === 'Presente') {
+          nomesPresentes.add(att.collaborator_name);
+        }
+      });
+
+      setTotalPresentes(nomesPresentes.size);
+
+      // 4. Fetch de Mapeamento de Custos para rateio
+      const { data: mappings } = await supabase.from('food_cost_mapping').select('*');
+      const mapHash = new Map();
+      (mappings || []).forEach(m => {
+        mapHash.set(m.collaborator_name, m.contract_name || 'Geral/Não Alocado');
+      });
+
+      // 5. Agrupa apenas os Nomes Presentes por contrato
+      const groups = new Map<string, number>();
+      nomesPresentes.forEach(nome => {
+        const contrato = mapHash.get(nome) || 'Geral/Não Alocado';
+        groups.set(contrato, (groups.get(contrato) || 0) + 1);
+      });
+
+      // Converte para array para renderizar ordenado
+      const sortedGroups = Array.from(groups.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a,b) => b.count - a.count);
+
+      setAgrupamento(sortedGroups);
+
     } catch (err: any) {
-      console.error('Erro ao buscar contratos:', err);
+      console.error('Erro ao calcular fechamento:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchCostCenters();
-  }, [fetchCostCenters]);
+    fetchRealData();
+  }, [fetchRealData]);
 
-  const total = costelinha + frango;
+  const handleSaveHistory = async () => {
+    // Validação matemática
+    if (prot1Qty + prot2Qty !== totalPresentes && totalPresentes > 0) {
+      if(!confirm(`Aviso: A soma das carnes (${prot1Qty + prot2Qty}) é diferente do Total de Presentes (${totalPresentes}). Deseja salvar mesmo assim?`)) {
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        date: new Date().toISOString().split('T')[0],
+        meals: prot1Qty + prot2Qty || totalPresentes,
+        cost_center: 'Geral Consolidado',
+        contract: 'Fechamento Total',
+        obs: obs || `${prot1Name}: ${prot1Qty}, ${prot2Name}: ${prot2Qty}`,
+        status: 'Validated'
+      };
+      
+      const { error } = await supabase.from('meal_history').insert([payload]);
+      
+      if (error) {
+        if (error.code === '42P01') {
+          alert('Aviso: Tabela "meal_history" não encontrada no Supabase. Crie-a se desejar armazenar oficialmente.');
+        } else {
+          throw error;
+        }
+      } else {
+        alert('Pedido salvo no histórico de longo prazo!');
+      }
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const copyToWhatsApp = () => {
-    const text = `*Resumo de Refeições - FoodControl*\n\nTotal Consolidado: ${total} UND\n- Costelinha assada: ${costelinha}\n- Filé de frango: ${frango}\n\nObservações: ${obs || 'Nenhuma'}`;
+    let agrupamentoTxt = agrupamento.map(g => `- ${g.name}: ${g.count} UND`).join('\n');
+    if (agrupamento.length === 0) agrupamentoTxt = "- Sem rateios específicos capturados no cenário de hoje.";
+
+    const text = `*Resumo de Almoço - FoodControl*\n\n*TOTAL CÁLCULO DE PRESENÇA:* ${totalPresentes} UND\n\n*PROTEÍNAS (PEDIDO FINAL)*\n- ${prot1Name}: ${prot1Qty}\n- ${prot2Name}: ${prot2Qty}\n\n*DIVISÃO / RATEIO INTERNO*\n${agrupamentoTxt}\n\n*OBSERVAÇÕES:*\n${obs || 'Nenhuma'}`;
     navigator.clipboard.writeText(text);
-    alert('Texto copiado para o WhatsApp!');
+    alert('Texto de requisição copiado para o WhatsApp com sucesso!');
   };
 
   return (
     <Layout>
-      {/* Header Section */}
       <header className="mb-10">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-extrabold text-[#111d23] font-manrope tracking-tight mb-2">Fechamento do Pedido</h1>
-            <p className="text-slate-500">Resumo final e consolidação para o fornecedor.</p>
+            <p className="text-slate-500">Resumo final em tempo real dos Presentes e consolidação.</p>
           </div>
           <div className="flex gap-3">
             <button 
-              onClick={fetchCostCenters}
-              className="bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-inter font-bold text-xs uppercase tracking-widest hover:bg-slate-300 transition-colors flex items-center gap-2"
+              onClick={fetchRealData}
+              className="bg-white text-slate-700 px-5 py-2.5 rounded-xl border border-slate-200/50 shadow-sm font-inter font-bold text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2"
             >
-              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
-              Atualizar
+              <RefreshCw className={cn("w-4 h-4 text-[#004354]", loading && "animate-spin")} />
+              Atualizar Matemática
             </button>
           </div>
         </div>
@@ -88,14 +179,23 @@ export default function PedidosPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Main Summary Card */}
         <section className="lg:col-span-8 space-y-6">
+          
+          {/* Validador de Totais Alerta */}
+          {(prot1Qty + prot2Qty !== totalPresentes) && totalPresentes > 0 && (
+             <div className="bg-amber-50 text-amber-800 border border-amber-200 p-4 rounded-xl text-sm font-medium flex justify-between items-center">
+               <span>⚠️ O total de Proteínas digitadas ({prot1Qty + prot2Qty}) não bate com os Presentes do dia ({totalPresentes}). Verifique!</span>
+             </div>
+          )}
+
           {/* Totals Breakdown */}
           <div className="bg-white p-8 rounded-xl shadow-[0px_20px_40px_rgba(17,29,35,0.04)] relative overflow-hidden border border-slate-200/50">
-            <div className="absolute top-0 right-0 p-6 opacity-5">
+            <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
               <UtensilsCrossed className="w-24 h-24" />
             </div>
+            
             <h3 className="text-slate-400 font-manrope font-bold text-xs uppercase tracking-widest mb-6 flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#004354]"></span>
-              Resumo por Centro de Custo
+              Leitura em Tempo Real (Painel Diário)
             </h3>
             
             {loading ? (
@@ -104,18 +204,19 @@ export default function PedidosPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                {/* Total Geral de Presentes */}
                 <div className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                  <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Total Consolidado</p>
-                  <p className="text-4xl font-manrope font-extrabold text-[#004354]">{total} <span className="text-lg font-medium text-slate-400">UND</span></p>
+                  <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">Pessoas em Campo (Presente)</p>
+                  <p className="text-4xl font-manrope font-extrabold text-[#004354]">{totalPresentes} <span className="text-lg font-medium text-slate-400">UND</span></p>
                 </div>
-                {costCenters.slice(0, 2).map((cc, idx) => (
-                  <div key={cc.id} className="bg-[#f4faff] p-6 rounded-xl border border-slate-200/50">
-                    <p className="text-slate-500 font-inter text-[11px] font-bold uppercase tracking-tighter mb-1">{cc.nome}</p>
-                    <p className={cn(
-                      "text-4xl font-manrope font-extrabold",
-                      idx === 0 ? "text-cyan-700" : "text-teal-700"
-                    )}>
-                      {Math.floor(total / (idx + 2))} <span className="text-lg font-medium text-slate-400">UND</span>
+
+                {/* Subdivisões por contrato */}
+                {agrupamento.slice(0, 5).map((grupo, idx) => (
+                  <div key={idx} className="bg-white p-6 rounded-xl border border-slate-200/50 flex flex-col justify-between">
+                    <p className="text-slate-500 font-inter text-[10px] font-bold uppercase tracking-tighter mb-2 line-clamp-2" title={grupo.name}>{grupo.name}</p>
+                    <p className="text-3xl font-manrope font-extrabold text-teal-700">
+                      {grupo.count} <span className="text-base font-medium text-slate-400">UND</span>
                     </p>
                   </div>
                 ))}
@@ -123,41 +224,48 @@ export default function PedidosPage() {
             )}
           </div>
 
-          {/* Specific Items Grid */}
+          {/* Specific Items Grid - MANUAL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h4 className="font-manrope font-bold text-[#111d23]">Costelinha assada</h4>
-                  <p className="text-xs text-slate-500">Proteína Principal</p>
-                </div>
-                <span className="bg-teal-50 text-teal-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Ativo</span>
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50 focus-within:ring-2 focus-within:ring-[#004354]/10 transition-all">
+              <div className="flex flex-col mb-6 gap-2">
+                <input 
+                  type="text"
+                  value={prot1Name}
+                  onChange={e => setProt1Name(e.target.value)}
+                  className="font-manrope font-bold text-xl text-[#111d23] border-b border-dashed border-slate-300 focus:border-[#004354] bg-transparent outline-none pb-1"
+                />
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Opção 1</p>
               </div>
               <div className="relative">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute -top-2 left-3 bg-white px-1">Quantidade</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute -top-2 left-3 bg-white px-1">Quantidade Distribuída</label>
                 <input 
                   type="number" 
-                  value={costelinha}
-                  onChange={(e) => setCostelinha(Number(e.target.value))}
-                  className="w-full bg-[#f4faff] border-none rounded-lg font-manrope font-bold text-2xl text-[#004354] p-4 focus:ring-2 focus:ring-[#004354]/20"
+                  min="0"
+                  value={prot1Qty}
+                  onChange={(e) => setProt1Qty(Number(e.target.value))}
+                  className="w-full bg-[#f4faff] border-none rounded-lg font-manrope font-bold text-2xl text-[#004354] p-4 text-center focus:ring-2 focus:ring-[#004354]/20 outline-none"
                 />
               </div>
             </div>
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h4 className="font-manrope font-bold text-[#111d23]">Filé de frango</h4>
-                  <p className="text-xs text-slate-500">Opção Leve</p>
-                </div>
-                <span className="bg-teal-50 text-teal-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Ativo</span>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50 focus-within:ring-2 focus-within:ring-[#004354]/10 transition-all">
+              <div className="flex flex-col mb-6 gap-2">
+                <input 
+                  type="text"
+                  value={prot2Name}
+                  onChange={e => setProt2Name(e.target.value)}
+                  className="font-manrope font-bold text-xl text-[#111d23] border-b border-dashed border-slate-300 focus:border-[#004354] bg-transparent outline-none pb-1"
+                />
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Opção 2</p>
               </div>
               <div className="relative">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute -top-2 left-3 bg-white px-1">Quantidade</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest absolute -top-2 left-3 bg-white px-1">Quantidade Distribuída</label>
                 <input 
                   type="number" 
-                  value={frango}
-                  onChange={(e) => setFrango(Number(e.target.value))}
-                  className="w-full bg-[#f4faff] border-none rounded-lg font-manrope font-bold text-2xl text-[#004354] p-4 focus:ring-2 focus:ring-[#004354]/20"
+                  min="0"
+                  value={prot2Qty}
+                  onChange={(e) => setProt2Qty(Number(e.target.value))}
+                  className="w-full bg-[#f4faff] border-none rounded-lg font-manrope font-bold text-2xl text-[#004354] p-4 text-center focus:ring-2 focus:ring-[#004354]/20 outline-none"
                 />
               </div>
             </div>
@@ -165,10 +273,10 @@ export default function PedidosPage() {
 
           {/* Identificação Adicional */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200/50">
-            <h3 className="font-manrope font-bold text-[#111d23] mb-4">Identificação Adicional</h3>
+            <h3 className="font-manrope font-bold text-[#111d23] mb-4">Informações e Exceções</h3>
             <textarea 
-              className="w-full bg-[#f4faff] border-none rounded-lg text-sm text-[#111d23] p-4 h-24 focus:ring-2 focus:ring-[#004354]/20"
-              placeholder="Ex: Adicionar 2 marmitas sem cebola para a equipe técnica..."
+              className="w-full bg-[#f4faff] border-none rounded-lg text-sm text-[#111d23] p-4 h-24 focus:ring-2 focus:ring-[#004354]/20 outline-none resize-none"
+              placeholder="Ex: Mandar 2 sem pimenta, o número final fecha com o extra da noite..."
               value={obs}
               onChange={(e) => setObs(e.target.value)}
             ></textarea>
@@ -177,13 +285,12 @@ export default function PedidosPage() {
 
         {/* Sidebar Actions */}
         <aside className="lg:col-span-4 space-y-6">
-          {/* WhatsApp Share Card */}
           <div className="bg-[#004354] p-8 rounded-xl text-white shadow-lg shadow-[#004354]/10 flex flex-col items-center text-center">
             <div className="bg-white/10 w-16 h-16 rounded-full flex items-center justify-center mb-6">
               <Send className="w-8 h-8 text-white" />
             </div>
             <h3 className="font-manrope font-bold text-xl mb-2">Enviar ao Fornecedor</h3>
-            <p className="text-white/70 text-sm mb-8 px-4">Gere o texto formatado para envio instantâneo via WhatsApp corporativo.</p>
+            <p className="text-white/70 text-sm mb-8 px-4">Dispare o rateio oficial via Mensagem.</p>
             <button 
               onClick={copyToWhatsApp}
               className="w-full bg-[#25D366] hover:bg-[#128C7E] text-white py-4 rounded-xl font-manrope font-extrabold flex items-center justify-center gap-3 transition-all transform active:scale-95 duration-150 shadow-md"
@@ -193,14 +300,17 @@ export default function PedidosPage() {
             </button>
           </div>
 
-          {/* Final Confirmation */}
           <div className="bg-slate-100 p-6 rounded-xl border border-slate-200/50">
             <p className="text-xs text-slate-500 font-inter font-bold uppercase tracking-widest mb-4">Ação Administrativa</p>
-            <button className="w-full bg-[#005c72] text-white hover:bg-[#004354] py-4 rounded-xl font-manrope font-bold flex items-center justify-center gap-2 transition-all">
-              <Save className="w-5 h-5" />
-              Salvar no Histórico
+            <button 
+              onClick={handleSaveHistory}
+              disabled={saving}
+              className="w-full bg-[#005c72] text-white hover:bg-[#004354] py-4 rounded-xl font-manrope font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {saving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+              {saving ? 'Registrando...' : 'Gravar Histórico Oficial'}
             </button>
-            <p className="mt-4 text-[11px] text-center text-slate-400">Ao salvar, este pedido será registrado como &quot;Finalizado&quot; no FoodControl.</p>
+            <p className="mt-4 text-[11px] text-center text-slate-400">Salva os dados do pedido montado acima para registro de fechamento financeiro.</p>
           </div>
         </aside>
       </div>
