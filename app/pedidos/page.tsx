@@ -129,7 +129,7 @@ export default function PedidosPage() {
         status: 'Validated'
       };
       
-      const { error } = await supabase.from('meal_history').insert([payload]);
+      const { error } = await supabase.from('meal_history').upsert([payload], { onConflict: 'date' } as any);
       
       if (error) {
         if (error.code === '42P01') {
