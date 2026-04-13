@@ -31,7 +31,9 @@ export default function DailyControl() {
   
   // Date State
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [importSourceDate, setImportSourceDate] = useState(() => getYesterdayDateStr(new Date().toISOString().split('T')[0]));
   const [importing, setImporting] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   // Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -182,28 +184,27 @@ export default function DailyControl() {
     }
   };
 
-  const handleImportYesterday = async () => {
-    const yesterday = getYesterdayDateStr(currentDate);
-    if (!confirm(`Deseja importar as configurações e status do dia anterior (${yesterday}) para Hoje?`)) return;
+  const handleImportFromDate = async () => {
+    if (!confirm(`Deseja importar as configurações e status do dia selecionado (${importSourceDate}) para o dia atual (${currentDate})?`)) return;
     
     setImporting(true);
     try {
-      const { data: yesterdayData, error: yesterdayError } = await supabase
+      const { data: sourceData, error: sourceError } = await supabase
         .from('daily_attendance')
         .select('*')
-        .eq('date', yesterday);
+        .eq('date', importSourceDate);
 
-      if (yesterdayError) {
-        if (yesterdayError.code === '42P01') throw new Error('A tabela daily_attendance não existe.');
-        throw yesterdayError;
+      if (sourceError) {
+        if (sourceError.code === '42P01') throw new Error('A tabela daily_attendance não existe.');
+        throw sourceError;
       }
 
-      if (!yesterdayData || yesterdayData.length === 0) {
-        alert('Nenhum dado encontrado no dia anterior para importar.');
+      if (!sourceData || sourceData.length === 0) {
+        alert(`Nenhum dado encontrado no dia ${importSourceDate} para importar.`);
         return;
       }
 
-      const upserts = yesterdayData.map(att => ({
+      const upserts = sourceData.map(att => ({
         date: currentDate,
         collaborator_name: att.collaborator_name,
         status: att.status,
@@ -217,10 +218,11 @@ export default function DailyControl() {
       if (upsertError) throw upsertError;
       
       alert('Status importados com sucesso!');
+      setIsImportModalOpen(false);
       fetchDailyData();
     } catch (err: any) {
       console.error('Erro ao importar:', err);
-      alert('Erro ao importar dados do dia anterior. ' + err.message);
+      alert('Erro ao importar dados. ' + err.message);
     } finally {
       setImporting(false);
     }
@@ -312,12 +314,12 @@ export default function DailyControl() {
              <span>Extra</span>
           </button>
           <button 
-            onClick={handleImportYesterday}
+            onClick={() => setIsImportModalOpen(true)}
             disabled={importing}
-            className="w-full md:w-auto bg-[#004354] px-4 py-3 md:py-2 text-white rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer hover:bg-[#005c72] transition-colors disabled:opacity-50"
+            className="flex-1 md:flex-none bg-[#004354] px-4 py-3 md:py-2 text-white rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer hover:bg-[#005c72] transition-colors disabled:opacity-50"
           >
             <Download className={cn("w-4 h-4", importing && "animate-bounce")} />
-            <span className="text-sm font-bold">Puxar de Ontem</span>
+            <span className="text-sm font-bold">Importar dados de:</span>
           </button>
         </div>
       </div>
@@ -623,6 +625,74 @@ export default function DailyControl() {
           </div>
         </div>
       </div>
+
+      {/* Modal Importar Dados de Outra Data */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+               <div>
+                  <h2 className="font-black text-[#111d23] text-lg">Importar de Outra Data</h2>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Sincronização inteligente de presença</p>
+               </div>
+               <button onClick={() => setIsImportModalOpen(false)} className="p-2 text-slate-300 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all">
+                 <X className="w-5 h-5" />
+               </button>
+            </div>
+
+            <div className="p-8 space-y-6">
+              <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl flex gap-3 items-start">
+                 <div className="p-2 bg-blue-100/50 rounded-lg">
+                    <Calendar className="w-4 h-4 text-blue-600" />
+                 </div>
+                 <p className="text-xs text-blue-800 font-medium leading-relaxed">
+                    Selecione a data de origem. Todos os <strong>Status</strong> e <strong>Observações</strong> serão replicados para hoje ({currentDate}).
+                 </p>
+              </div>
+
+              <div className="space-y-2">
+                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Origem</label>
+                 <div className="relative group">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-[#004354] transition-colors" />
+                    <input 
+                      type="date" 
+                      value={importSourceDate}
+                      onChange={(e) => setImportSourceDate(e.target.value)}
+                      className="w-full bg-slate-50 border-none rounded-2xl py-4 pl-12 pr-4 text-sm font-bold text-[#111d23] focus:ring-2 focus:ring-[#004354]/10 outline-none transition-all"
+                    />
+                 </div>
+              </div>
+            </div>
+
+            <div className="px-8 py-6 border-t border-slate-100 flex flex-col md:flex-row gap-3 bg-slate-50/50">
+               <button 
+                 onClick={() => setIsImportModalOpen(false)}
+                 className="flex-1 px-6 py-3.5 rounded-2xl text-sm font-bold text-slate-500 hover:bg-slate-200/50 transition-all"
+                 disabled={importing}
+               >
+                 Cancelar
+               </button>
+               <button 
+                 onClick={handleImportFromDate}
+                 disabled={importing}
+                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl text-sm font-bold text-white bg-gradient-to-br from-[#004354] to-[#015266] hover:shadow-lg hover:shadow-[#004354]/20 transition-all disabled:opacity-50"
+               >
+                 {importing ? (
+                   <>
+                     <RefreshCw className="w-4 h-4 animate-spin" />
+                     Processando...
+                   </>
+                 ) : (
+                   <>
+                     <Download className="w-4 h-4" />
+                     Confirmar Importação
+                   </>
+                 )}
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Nova Refeição Extra */}
       {isExtraOpen && (

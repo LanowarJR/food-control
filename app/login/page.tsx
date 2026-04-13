@@ -39,12 +39,13 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        console.error('Erro de Autenticação Supabase:', error);
         if (error.message === 'Invalid login credentials') {
            setError('E-mail ou senha incorretos.');
         } else {
@@ -53,8 +54,10 @@ export default function LoginPage() {
         return;
       }
 
+      console.log('Login bem sucedido:', data.user?.email);
       router.push('/');
     } catch (err: any) {
+      console.error('Erro inesperado no Login:', err);
       setError('Ocorreu um erro inesperado ao realizar o login.');
     } finally {
       setLoading(false);
