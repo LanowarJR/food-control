@@ -11,6 +11,7 @@ import {
   X
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
@@ -38,8 +39,13 @@ export default function Sidebar({ isOpen, closeSidebar }: SidebarProps) {
       {/* Header na Sidebar (Versão Mobile) */}
       <div className="px-6 mb-8 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-[#004354] rounded-lg flex items-center justify-center text-white font-bold">
-            FC
+          <div className="w-10 h-10 relative overflow-hidden rounded-xl shadow-sm border border-slate-200 bg-white">
+            <Image 
+              src="/logo.png" 
+              alt="FoodControl Logo" 
+              fill 
+              className="object-cover scale-150"
+            />
           </div>
           <div>
             <h2 className="text-lg font-black text-[#004354] leading-tight font-manrope">FoodControl</h2>

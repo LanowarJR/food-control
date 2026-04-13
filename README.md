@@ -1,72 +1,59 @@
 # FoodControl - Sistema de Gestão de Refeições e Presença
 
-## Visão Geral
-O **FoodControl** é um Web App moderno e intuitivo desenvolvido para substituir planilhas físicas e digitais no controle de presença de colaboradores e gestão de refeições em ambientes industriais (ex: Facility A). O sistema integra-se ao **Supabase** para persistência de dados e oferece ferramentas para fechamento diário de pedidos, histórico de consumo e gestão de pessoal.
+## 🚀 Visão Geral
+O **FoodControl** é um Web App moderno e intuitivo desenvolvido para o controle de presença de colaboradores e gestão de refeições em ambientes industriais. O sistema oferece precisão no controle de custos, facilidade operacional para o fechamento de pedidos diários e segurança robusta através de Row Level Security (RLS).
 
-## Stack Tecnológica
-- **Framework:** Next.js 15+ (App Router)
+![FoodControl Logo](/public/logo.png)
+
+## 🛠️ Stack Tecnológica
+- **Framework:** Next.js 15 (App Router)
 - **Linguagem:** TypeScript
 - **Estilização:** Tailwind CSS v4
-- **Banco de Dados:** Supabase (PostgreSQL)
+- **Banco de Dados:** Supabase (PostgreSQL) com RLS Ativo
+- **Autenticação:** Supabase Auth (Role-Based Access Control)
 - **Ícones:** Lucide React
 - **Gráficos:** Recharts
-- **Animações:** Motion (motion/react)
-- **Datas:** date-fns
+- **Animações:** Motion (framer-motion)
 
-## Estrutura do Projeto
+## 📁 Estrutura do Projeto
 - `/app`: Rotas e páginas da aplicação.
-  - `page.tsx`: Dashboard de Controle Diário (Presença).
+  - `page.tsx`: Dashboard de Controle Diário (Snapshot do Dia).
   - `/gestao`: Gestão de Colaboradores e Contratos.
-  - `/pedidos`: Fechamento de pedidos e resumo para fornecedores.
-  - `/historico`: Visualização de dados históricos e gráficos de consumo.
-  - `/debug-supabase`: Ferramenta de diagnóstico de conexão com o banco.
-- `/components`: Componentes reutilizáveis de UI.
-  - `Layout.tsx`: Estrutura base (Sidebar + TopBar + BottomBar).
-  - `Sidebar.tsx`: Navegação principal.
-  - `TopBar.tsx`: Informações de perfil e data.
-  - `BottomBar.tsx`: Resumo rápido de contagem de refeições.
-- `/lib`: Utilitários e configurações (ex: `supabase.ts`).
-- `/hooks`: Hooks customizados (ex: `use-mobile.ts`).
+  - `/pedidos`: Fechamento de pedidos, rateio automático e envio via WhatsApp.
+  - `/historico`: Histórico consolidado de consumo e gráficos.
+  - `/extras`: Lançamento de lotes (Café, Jantar, Lanches extras).
+  - `/login`: Portal de acesso seguro.
+- `/components`: Componentes modulares (Layout, Sidebar, TopBar, BottomBar).
+- `/public`: Assets estáticos, incluindo a nova Identidade Visual.
 
-## Modelo de Dados (Supabase)
-O projeto utiliza as seguintes tabelas principais:
+## 🔒 Segurança e Dados (RLS)
+O projeto implementa **Row Level Security (RLS)** para garantir que os dados sejam acessíveis apenas por pessoal autorizado.
+- **Role Control**: O acesso total (CRUD) é restrito a usuários com a role `super_admin`.
+- **Profiles**: As permissões são gerenciadas através da tabela `public.profiles`, vinculada ao ID do usuário no Supabase Auth.
+- **Tabelas Protegidas**: `daily_attendance`, `meal_history`, `food_cost_mapping`, `secondary_meals`.
 
-### 1. `collaborators` (Colaboradores)
-- `id`: UUID ou ID numérico.
-- `nome` / `name`: Nome completo.
-- `avatar_url`: URL da imagem de perfil.
-- `cargo`: Função do colaborador.
-- `centro_custo` / `cost_center`: Vínculo com contrato/centro de custo.
-- `status`: 'Ativo' ou 'Inativo'.
-- `status_presenca`: 'Presente', 'Falta', 'Atraso'.
-- `comment`: Observações diárias.
+## 📊 Modelo de Dados Principal
+- **`collaborators`**: Base de funcionários vinculada ao projeto TerminalFlow.
+- **`profiles`**: Gestão de usuários e permissões do sistema.
+- **`daily_attendance`**: Registro diário de presença e extras.
+- **`meal_history`**: Histórico oficial de fechamento de pedidos (consolidado).
+- **`food_cost_mapping`**: Relacionamento N:1 entre colaboradores e centros de custo para rateio.
+- **`secondary_meals`**: Controle de lotes de insumos avulsos.
 
-### 2. `contracts` (Contratos / Centros de Custo)
-- `id`: Identificador único.
-- `nome` / `name`: Nome do centro de custo ou contrato.
+## ✨ Funcionalidades Recentes
+- **Identidade Visual**: Implementação da nova logo oficial (Chef Hat + Graph).
+- **Gestão de Extras**: Adição e exclusão dinâmica de colaboradores avulsos no controle diário.
+- **Snapshot Upsert**: O histórico oficial agora permite atualizações no mesmo dia sem duplicar registros.
+- **Segurança de Função**: Funções SQL com `search_path` definido para evitar mutabilidade e vulnerabilidades.
 
-## Variáveis de Ambiente
-Necessárias no arquivo `.env` ou nas configurações do ambiente:
-- `NEXT_PUBLIC_SUPABASE_URL`: URL do projeto Supabase.
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Chave anônima da API do Supabase.
-- `NEXT_PUBLIC_GEMINI_API_KEY`: Chave para integração com IA (Gemini).
-
-## Fluxos Principais
-1. **Controle Diário:** O gestor marca a presença dos colaboradores na tela inicial. Os dados são sincronizados com o Supabase.
-2. **Gestão de Pessoal:** Cadastro e edição de colaboradores e seus respectivos centros de custo.
-3. **Fechamento de Pedido:** Consolidação das refeições do dia (Café, Almoço, Jantar) com opção de copiar resumo formatado para envio via WhatsApp.
-4. **Histórico:** Análise de tendências de consumo semanal/mensal através de gráficos.
-
-## Guia para IA e Desenvolvedores
-- **Padrão de Código:** Componentes funcionais com hooks (`useState`, `useEffect`, `useCallback`).
-- **Estilo:** Utilitários Tailwind puro. Evitar CSS inline.
-- **Acessibilidade:** Sempre incluir `alt` em componentes `<Image>` e garantir contraste adequado.
-- **Integração Supabase:** Utilizar o cliente em `@/lib/supabase`. Sempre tratar estados de `loading` e `error`.
-- **Lógica de Colunas:** O código está preparado para lidar com nomes de colunas tanto em Inglês quanto em Português para compatibilidade com diferentes esquemas de banco.
-
-## Roadmap de Expansão
+## 🗺️ Roadmap
+- [x] Implementar autenticação de usuários (Supabase Auth).
+- [x] Conectar painéis aos dados reais do Supabase (Removendo Mocks).
+- [x] Implementar Row Level Security (RLS).
+- [x] Nova identidade visual e logo personalizada.
 - [ ] Implementar CRUD completo na tela de Gestão (Adicionar/Editar/Remover).
-- [ ] Conectar a página de Histórico aos dados reais do Supabase (atualmente utiliza mock).
 - [ ] Integrar Gemini AI para análise preditiva de consumo e sugestão de cardápios.
-- [ ] Implementar autenticação de usuários (Supabase Auth).
 - [ ] Adicionar exportação de relatórios em PDF/Excel.
+
+---
+&copy; 2024 FoodControl - Gestão de Refeições Industriais.

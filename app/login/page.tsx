@@ -12,6 +12,7 @@ import {
   RefreshCw 
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -83,8 +84,13 @@ export default function LoginPage() {
       <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-8 duration-700">
         {/* Logo/Brand Area */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#004354] to-[#015266] rounded-3xl shadow-xl shadow-[#004354]/20 mb-6 rotate-3 hover:rotate-0 transition-transform duration-500">
-            <ChefHat className="w-10 h-10 text-white" />
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-white rounded-3xl shadow-xl shadow-[#004354]/10 mb-6 rotate-3 hover:rotate-0 transition-transform duration-500 border border-slate-100 relative overflow-hidden">
+            <Image 
+              src="/logo.png" 
+              alt="FoodControl Logo" 
+              fill 
+              className="object-cover scale-150"
+            />
           </div>
           <h1 className="text-4xl font-black text-[#111d23] tracking-tighter font-manrope">FoodControl</h1>
           <p className="text-slate-500 font-medium mt-2">Gestão diária de Presença e Refeições</p>
