@@ -10,6 +10,7 @@ import {
   Calendar,
   Download,
   Plus,
+  Trash2,
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,9 @@ export default function DailyControl() {
   const [isExtraOpen, setIsExtraOpen] = useState(false);
   const [extraForm, setExtraForm] = useState({ nome: '', centro_custo: '' });
   const [savingExtra, setSavingExtra] = useState(false);
+
+  // UI State
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const fetchContracts = useCallback(async () => {
     try {
@@ -275,6 +279,26 @@ export default function DailyControl() {
     }
   };
 
+  const deleteExtraMember = async (nome: string) => {
+    if (!confirm(`Deseja realmente remover "${nome}" da lista do dia?`)) return;
+    
+    try {
+      const { error } = await supabase
+        .from('daily_attendance')
+        .delete()
+        .eq('date', currentDate)
+        .eq('collaborator_name', nome);
+
+      if (error) throw error;
+      
+      setEmployees(prev => prev.filter(e => e.nome !== nome));
+      setOpenMenuId(null);
+    } catch (err: any) {
+      console.error('Erro ao excluir:', err);
+      alert('Erro ao excluir: ' + err.message);
+    }
+  };
+
   const stats = {
     total: employees.length,
     presentes: employees.filter(e => e.status_presenca === 'Presente').length,
@@ -433,9 +457,29 @@ export default function DailyControl() {
                         </p>
                       </div>
                     </div>
-                    <button className="text-slate-300">
-                       <MoreVertical className="w-5 h-5" />
-                    </button>
+                    <div className="relative">
+                      <button 
+                        onClick={() => setOpenMenuId(openMenuId === emp.nome ? null : emp.nome)}
+                        className={cn(
+                          "p-2 rounded-lg transition-colors",
+                          openMenuId === emp.nome ? "bg-slate-100 text-[#004354]" : "text-slate-300"
+                        )}
+                      >
+                         <MoreVertical className="w-5 h-5" />
+                      </button>
+
+                      {openMenuId === emp.nome && isExtra && (
+                        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                           <button 
+                             onClick={() => deleteExtraMember(emp.nome)}
+                             className="w-full text-left px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                             Remover do Dia
+                           </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 mb-3">
@@ -597,10 +641,28 @@ export default function DailyControl() {
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-5 text-right">
-                        <button className="text-slate-400 hover:text-[#004354] transition-colors">
+                      <td className="px-6 py-5 text-right relative">
+                        <button 
+                          onClick={() => setOpenMenuId(openMenuId === emp.nome ? null : emp.nome)}
+                          className={cn(
+                            "p-2 rounded-lg transition-colors",
+                            openMenuId === emp.nome ? "bg-slate-100 text-[#004354]" : "text-slate-400 hover:text-[#004354]"
+                          )}
+                        >
                           <MoreVertical className="w-5 h-5" />
                         </button>
+
+                        {openMenuId === emp.nome && isExtra && (
+                          <div className="absolute right-12 top-1/2 -translate-y-1/2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                             <button 
+                               onClick={() => deleteExtraMember(emp.nome)}
+                               className="w-full text-left px-4 py-3 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                             >
+                               <Trash2 className="w-4 h-4" />
+                               Remover do Dia
+                             </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
