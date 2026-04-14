@@ -20,13 +20,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getInitialSession = async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
-      setSession(initialSession);
-      
-      if (!initialSession && pathname !== '/login') {
-        router.push('/login');
+      try {
+        const { data } = await supabase.auth.getSession();
+        const initialSession = data?.session;
+        setSession(initialSession);
+        
+        if (!initialSession && pathname !== '/login') {
+          router.push('/login');
+        }
+      } catch (err) {
+        console.error('Session error:', err);
+        if (pathname !== '/login') {
+          router.push('/login');
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     getInitialSession();

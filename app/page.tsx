@@ -114,7 +114,8 @@ export default function DailyControl() {
         return {
           ...emp,
           status_presenca: att?.status || 'Presente',
-          comment: att?.comment || ''
+          comment: att?.comment || '',
+          overtime: att?.overtime || ''
         };
       });
 
@@ -130,7 +131,8 @@ export default function DailyControl() {
             centro_custo: mapHash.get(att.collaborator_name) || 'Extra',
             cargo: 'Refeição Extra/Avulsa',
             status_presenca: att.status,
-            comment: att.comment
+            comment: att.comment,
+            overtime: att.overtime || ''
           });
         }
       });
@@ -155,7 +157,7 @@ export default function DailyControl() {
     fetchDailyData();
   }, [fetchDailyData, fetchContracts]);
 
-  const updateEmployeeAttendance = async (nome: string, field: 'status' | 'comment', value: string) => {
+  const updateEmployeeAttendance = async (nome: string, field: 'status' | 'comment' | 'overtime', value: string) => {
     setUpdatingId(nome);
     try {
       const emp = employees.find(e => e.nome === nome);
@@ -165,7 +167,8 @@ export default function DailyControl() {
         date: currentDate,
         collaborator_name: nome,
         status: field === 'status' ? value : emp.status_presenca,
-        comment: field === 'comment' ? value : emp.comment
+        comment: field === 'comment' ? value : emp.comment,
+        overtime: field === 'overtime' ? value : (emp.overtime || '')
       };
 
       const { error } = await supabase
@@ -179,7 +182,7 @@ export default function DailyControl() {
         throw error;
       }
 
-      setEmployees(prev => prev.map(e => e.nome === nome ? { ...e, status_presenca: payload.status, comment: payload.comment } : e));
+      setEmployees(prev => prev.map(e => e.nome === nome ? { ...e, status_presenca: payload.status, comment: payload.comment, overtime: payload.overtime } : e));
     } catch (err: any) {
       console.error(`Erro ao atualizar ${field}:`, err);
       alert('Falha ao salvar: ' + err.message);
@@ -212,7 +215,8 @@ export default function DailyControl() {
         date: currentDate,
         collaborator_name: att.collaborator_name,
         status: att.status,
-        comment: att.comment
+        comment: att.comment,
+        overtime: att.overtime || ''
       }));
 
       const { error: upsertError } = await supabase
@@ -264,7 +268,8 @@ export default function DailyControl() {
          date: currentDate,
          collaborator_name: extraForm.nome,
          status: 'Presente',
-         comment: 'Refeição Extra/Visitante'
+         comment: 'Refeição Extra/Visitante',
+         overtime: ''
        };
        await supabase.from('daily_attendance').upsert(attPayload, { onConflict: 'date, collaborator_name' });
 
@@ -506,23 +511,45 @@ export default function DailyControl() {
                     </select>
                   </div>
 
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      className={cn(
-                        "w-full bg-slate-50 border-none rounded-lg text-xs text-slate-600 p-3 outline-none focus:ring-1 focus:ring-teal-500/20",
-                        updatingId === emp.nome && "opacity-50"
-                      )}
-                      placeholder="Observação rápida..."
-                      defaultValue={emp.comment}
-                      onBlur={(e) => {
-                        if (e.target.value !== emp.comment) {
-                          updateEmployeeAttendance(emp.nome, 'comment', e.target.value);
-                        }
-                      }}
-                      disabled={updatingId === emp.nome}
-                    />
-                    {updatingId === emp.nome && <RefreshCw className="absolute right-3 top-3 w-3 h-3 text-teal-600 animate-spin" />}
+                  <div className="grid grid-cols-2 gap-2 mt-3 p-1">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        className={cn(
+                          "w-full bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 p-3 outline-none focus:ring-1 focus:ring-teal-500/20",
+                          updatingId === emp.nome && "opacity-50"
+                        )}
+                        key={`${emp.nome}-overtime-mobile`}
+                        placeholder="Hora Extra (ex: 2h)"
+                        defaultValue={emp.overtime ? (isNaN(Number(emp.overtime)) ? emp.overtime : emp.overtime + 'h') : ''}
+                        onBlur={(e) => {
+                          let val = e.target.value;
+                          if (val && !isNaN(Number(val))) val = val + 'h';
+                          if (val !== emp.overtime) {
+                            updateEmployeeAttendance(emp.nome, 'overtime', val);
+                          }
+                        }}
+                        disabled={updatingId === emp.nome}
+                      />
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        className={cn(
+                          "w-full bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600 p-3 outline-none focus:ring-1 focus:ring-teal-500/20",
+                          updatingId === emp.nome && "opacity-50"
+                        )}
+                        placeholder="Observação rápida..."
+                        defaultValue={emp.comment}
+                        onBlur={(e) => {
+                          if (e.target.value !== emp.comment) {
+                            updateEmployeeAttendance(emp.nome, 'comment', e.target.value);
+                          }
+                        }}
+                        disabled={updatingId === emp.nome}
+                      />
+                      {updatingId === emp.nome && <RefreshCw className="absolute right-3 top-3 w-3 h-3 text-teal-600 animate-spin" />}
+                    </div>
                   </div>
                 </div>
               );
@@ -538,6 +565,7 @@ export default function DailyControl() {
               <tr className="bg-slate-50/50">
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Colaborador / Visitante</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-center">Status Diário</th>
+                <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-center">Hora Extra</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Observação Específica</th>
                 <th className="px-6 py-4 text-[11px] font-bold text-slate-500 uppercase tracking-widest text-right">Ações</th>
               </tr>
@@ -613,6 +641,26 @@ export default function DailyControl() {
                           {isCustom && <option value="custom_mapped">{emp.status_presenca}</option>}
                           <option value="custom" className="text-slate-500 font-bold">+ Novo Customizado</option>
                         </select>
+                      </td>
+                      <td className="px-6 py-5 text-center">
+                         <input 
+                          key={`${emp.nome}-overtime-desktop`}
+                          type="text" 
+                          className={cn(
+                            "w-20 bg-slate-50 border border-slate-100 rounded-lg text-xs text-center text-slate-600 p-2 outline-none focus:ring-1 focus:ring-teal-500/20 mx-auto font-bold",
+                            updatingId === emp.nome && "opacity-50"
+                          )}
+                          placeholder="0h"
+                          defaultValue={emp.overtime ? (isNaN(Number(emp.overtime)) ? emp.overtime : emp.overtime + 'h') : '0h'}
+                          onBlur={(e) => {
+                            let val = e.target.value;
+                            if (val && !isNaN(Number(val))) val = val + 'h';
+                            if (val !== emp.overtime) {
+                              updateEmployeeAttendance(emp.nome, 'overtime', val);
+                            }
+                          }}
+                          disabled={updatingId === emp.nome}
+                        />
                       </td>
                       <td className="px-6 py-5 relative">
                         <input 

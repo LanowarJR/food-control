@@ -12,7 +12,15 @@ import {
   AlertTriangle,
   Calendar,
   RefreshCw,
-  TrendingDown
+  TrendingDown,
+  X,
+  Users,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Edit2,
+  Printer,
+  FileText
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -32,6 +40,11 @@ export default function HistoricoPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [contractFilter, setContractFilter] = useState('Todos os Contratos');
+  const [selectedDayData, setSelectedDayData] = useState<any[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Load History from Supabase
   const loadHistory = async () => {
@@ -51,6 +64,114 @@ export default function HistoricoPage() {
       console.error('Fallback error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openDayDetails = async (date: string) => {
+    setSelectedDate(date);
+    setIsModalOpen(true);
+    setModalLoading(true);
+    try {
+      // 1. Fetch base collaborators (same logic as dashboard)
+      const { data: colabData } = await supabase.from('collaborators').select('*');
+      const { data: mappings } = await supabase.from('food_cost_mapping').select('*');
+      
+      const mapHash = new Map();
+      (mappings || []).forEach(m => mapHash.set(m.collaborator_name, m.contract_name));
+
+      const dedupMap = new Map();
+      (colabData || []).forEach(emp => {
+        const nome = emp.nome || emp.name || 'Sem Nome';
+        if (!dedupMap.has(nome)) {
+          dedupMap.set(nome, {
+            nome,
+            centro_custo: mapHash.get(nome) || 'Não Alocado',
+            cargo: emp.role || emp.cargo || 'Funcional'
+          });
+        }
+      });
+      const uniqueColabs = Array.from(dedupMap.values());
+
+      // 2. Fetch daily_attendance for the selected date
+      const { data: attData, error } = await supabase
+        .from('daily_attendance')
+        .select('*')
+        .eq('date', date);
+      
+      if (error) throw error;
+      
+      const attendanceMap = new Map();
+      (attData || []).forEach(att => attendanceMap.set(att.collaborator_name, att));
+
+      // 3. Merge Base + Daily (Exact same logic as dashboard)
+      const merged = uniqueColabs.map(emp => {
+        const att = attendanceMap.get(emp.nome);
+        return {
+          id: att?.id, // May be undefined if not created yet
+          collaborator_name: emp.nome,
+          centro_custo: emp.centro_custo,
+          cargo: emp.cargo,
+          status: att?.status || 'Presente',
+          comment: att?.comment || '',
+          overtime: att?.overtime || ''
+        };
+      });
+
+      // 4. Extras (Only if they have a record for that day)
+      const colabNames = new Set(uniqueColabs.map(e => e.nome));
+      const extras: any[] = [];
+      attendanceMap.forEach(att => {
+        if (!colabNames.has(att.collaborator_name)) {
+          extras.push({
+            id: att.id,
+            collaborator_name: att.collaborator_name,
+            centro_custo: mapHash.get(att.collaborator_name) || 'Extra',
+            cargo: 'Refeição Extra/Avulsa',
+            status: att.status,
+            comment: att.comment,
+            overtime: att.overtime || ''
+          });
+        }
+      });
+
+      const finalArray = [...merged, ...extras].sort((a,b) => a.collaborator_name.localeCompare(b.collaborator_name));
+      setSelectedDayData(finalArray);
+
+    } catch (err: any) {
+      alert('Erro ao carregar detalhes: ' + err.message);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const updateDetail = async (record: any, field: string, value: string) => {
+    setUpdatingId(record.collaborator_name);
+    try {
+      const payload = {
+        date: selectedDate,
+        collaborator_name: record.collaborator_name,
+        status: field === 'status' ? value : record.status,
+        comment: field === 'comment' ? value : record.comment,
+        overtime: field === 'overtime' ? value : record.overtime
+      };
+
+      const { data: upsertData, error } = await supabase
+        .from('daily_attendance')
+        .upsert(payload, { onConflict: 'date, collaborator_name' } as any)
+        .select();
+
+      if (error) throw error;
+
+      // Update local state with the new data (including ID if it was new)
+      setSelectedDayData(prev => prev.map(d => 
+        d.collaborator_name === record.collaborator_name 
+          ? { ...d, ...payload, id: upsertData?.[0]?.id || d.id } 
+          : d
+      ));
+    } catch (err: any) {
+      alert('Erro ao salvar: ' + err.message);
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -119,7 +240,7 @@ export default function HistoricoPage() {
   return (
     <Layout>
       {/* Filters Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 print:hidden">
         <div className="space-y-1">
           <span className="font-inter text-[11px] font-bold uppercase tracking-[0.2em] text-[#004354]">Visão Estratégica</span>
           <h2 className="font-manrope text-3xl font-extrabold text-[#111d23] tracking-tight">Análise de Consumo</h2>
@@ -312,7 +433,8 @@ export default function HistoricoPage() {
                 <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Centro de Custo</th>
                 <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Contrato</th>
                 <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Pratos / Obs</th>
-                <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 text-right">Status</th>
+                <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Status</th>
+                <th className="px-8 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 text-right">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -355,6 +477,14 @@ export default function HistoricoPage() {
                         {item.status === 'Validated' ? 'Validado' : 'Pendente'}
                       </span>
                     </td>
+                    <td className="px-8 py-5 text-right">
+                      <button 
+                        onClick={() => openDayDetails(item.date)}
+                        className="bg-slate-100 hover:bg-[#004354] hover:text-white text-slate-600 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Resumo
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -375,6 +505,273 @@ export default function HistoricoPage() {
           </div>
         </div>
       </div>
+
+      {/* Audit Summary Modal */}
+      {isModalOpen && (
+        <>
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              /* Reset body to allow content to show */
+              body, html { 
+                visibility: hidden;
+                height: auto !important;
+                background: white !important;
+              }
+              
+              /* Show only the modal container */
+              .print-container, .print-container * { 
+                visibility: visible !important; 
+              }
+
+              .print-container { 
+                position: absolute !important; 
+                left: 0 !important; 
+                top: 0 !important; 
+                width: 100% !important; 
+                margin: 0 !important; 
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                display: flex !important;
+                flex-direction: column !important;
+                max-height: none !important;
+                background: white !important;
+                overflow: visible !important;
+              }
+              
+              /* Ensure containers don't clip at the bottom of pages */
+              .print-no-clip {
+                overflow: visible !important;
+                height: auto !important;
+                max-height: none !important;
+                border-radius: 0 !important;
+              }
+
+              section {
+                margin-bottom: 3rem !important;
+                break-inside: avoid-page !important;
+              }
+              
+              /* Ensure the overlay background is gone in print */
+              .modal-overlay-print {
+                background: white !important;
+                backdrop-filter: none !important;
+                position: static !important;
+                display: block !important;
+              }
+              
+              /* Specific fixes for typography and colors in print */
+              tr {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+                display: block !important;
+                width: 100% !important;
+              }
+
+              td, th, section, h3 {
+                break-inside: avoid !important;
+                page-break-inside: avoid !important;
+              }
+
+              h3 {
+                margin-top: 3rem !important;
+                margin-bottom: 1.5rem !important;
+                display: block !important;
+              }
+
+              h2, h3, h4, h5, p, span, td, th {
+                color: black !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+            }
+          `}} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#111d23]/80 backdrop-blur-sm overflow-y-auto modal-overlay-print print:p-0 print:block print:static">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-5xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] print-container print:max-h-none print:shadow-none print:rounded-none print:w-full print:border-none print:static">
+              {/* Modal Header */}
+              <div className="px-10 py-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/30 print:bg-white print:px-0 print:py-4">
+               <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="bg-[#004354] text-white p-1.5 rounded-lg print:hidden">
+                      <Calendar className="w-5 h-5" />
+                    </span>
+                    <h2 className="font-manrope font-black text-[#111d23] text-2xl tracking-tight">Audit Diário: {new Date(selectedDate + 'T12:00:00Z').toLocaleDateString('pt-BR')}</h2>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.2em] print:text-slate-600">Relatório Completo de Presença e Consumo</p>
+               </div>
+               <div className="flex items-center gap-3 print:hidden">
+                 <button 
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+                 >
+                   <Printer className="w-4 h-4" />
+                   Imprimir PDF
+                 </button>
+                 <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="p-3 text-slate-300 hover:text-[#004354] rounded-2xl hover:bg-white border border-transparent hover:border-slate-100 transition-all shadow-sm group"
+                 >
+                   <X className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" />
+                 </button>
+               </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 custom-scrollbar print:overflow-visible print:p-4">
+              {modalLoading ? (
+                <div className="py-24 text-center">
+                   <RefreshCw className="w-12 h-12 text-[#004354]/20 animate-spin mx-auto mb-4" />
+                   <p className="text-sm font-bold text-slate-300 uppercase tracking-widest">Compilando Dados...</p>
+                </div>
+              ) : selectedDayData.length === 0 ? (
+                <div className="py-24 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                   <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                   <p className="text-slate-400 font-bold italic">Nenhum registro encontrado para este dia.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Summary Tiles */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:grid-cols-4 print:mb-8">
+                    <div className="bg-teal-50/50 p-5 rounded-3xl border border-teal-100/50 flex flex-col justify-between print:border print:p-4">
+                      <p className="text-[10px] font-black text-teal-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <CheckCircle2 className="w-3 h-3" /> Presentes
+                      </p>
+                      <h4 className="text-3xl font-manrope font-black text-[#004354]">{selectedDayData.filter(d => d.status === 'Presente').length}</h4>
+                    </div>
+                    <div className="bg-red-50/50 p-5 rounded-3xl border border-red-100/50 flex flex-col justify-between print:border print:p-4">
+                      <p className="text-[10px] font-black text-red-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <XCircle className="w-3 h-3" /> Faltas
+                      </p>
+                      <h4 className="text-3xl font-manrope font-black text-red-700">{selectedDayData.filter(d => d.status === 'Falta').length}</h4>
+                    </div>
+                    <div className="bg-purple-50/50 p-5 rounded-3xl border border-purple-100/50 flex flex-col justify-between print:border print:p-4">
+                      <p className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                        <Clock className="w-3 h-3" /> Outros
+                      </p>
+                      <h4 className="text-3xl font-manrope font-black text-purple-700">{selectedDayData.filter(d => !['Presente', 'Falta'].includes(d.status)).length}</h4>
+                    </div>
+                    <div className="bg-[#004354] p-5 rounded-3xl text-white shadow-xl shadow-[#004354]/10 flex flex-col justify-between print:text-[#004354] print:bg-slate-50 print:border print:p-4">
+                      <p className="text-[10px] font-bold text-teal-200/60 uppercase tracking-widest mb-2 flex items-center gap-2 print:text-[#004354]">
+                        <TrendingUp className="w-3 h-3" /> Total Refeições
+                      </p>
+                      <h4 className="text-3xl font-manrope font-black">{data.find(d => d.date === selectedDate)?.meals || 0}</h4>
+                    </div>
+                  </div>
+
+                  {/* Present Group */}
+                  <section className="print:break-inside-avoid">
+                    <div className="flex items-center gap-3 mb-6">
+                      <h3 className="text-[10px] font-black text-teal-600 uppercase tracking-[0.3em] whitespace-nowrap bg-white pr-4">Equipe em Campo (Presentes)</h3>
+                      <div className="h-px bg-slate-100 flex-1 print:hidden"></div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm print:border-slate-200 print:no-clip">
+                      {/* Header for Desktop/Print */}
+                      <div className="bg-slate-50/50 flex px-6 py-4 border-b border-slate-50 print:bg-white">
+                        <div className="flex-1 text-[9px] font-black text-slate-400 uppercase tracking-widest">Colaborador</div>
+                        <div className="w-20 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">H. Extra</div>
+                        <div className="flex-1 text-[9px] font-black text-slate-400 uppercase tracking-widest pl-4">Observações</div>
+                      </div>
+                      <div className="divide-y divide-slate-50 print:no-clip">
+                        {selectedDayData.filter(d => d.status === 'Presente').map(record => (
+                          <DetailRow key={record.collaborator_name} record={record} updateDetail={updateDetail} updatingId={updatingId} />
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Absent Group */}
+                  <section className="print:break-inside-avoid print:no-clip">
+                    <div className="flex items-center gap-3 mb-6">
+                      <h3 className="text-[10px] font-black text-red-500 uppercase tracking-[0.3em] whitespace-nowrap bg-white pr-4">Ausências & Faltas</h3>
+                      <div className="h-px bg-slate-100 flex-1 print:hidden"></div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm print:border-slate-200 print:no-clip">
+                      <div className="divide-y divide-slate-50 print:no-clip">
+                        {selectedDayData.filter(d => d.status === 'Falta').map(record => (
+                          <DetailRow key={record.collaborator_name} record={record} updateDetail={updateDetail} updatingId={updatingId} />
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Others Group */}
+                  <section className="print:break-inside-avoid print:no-clip">
+                    <div className="flex items-center gap-3 mb-6">
+                      <h3 className="text-[10px] font-black text-purple-600 uppercase tracking-[0.3em] whitespace-nowrap bg-white pr-4">Afastamentos & Outros Status</h3>
+                      <div className="h-px bg-slate-100 flex-1 print:hidden"></div>
+                    </div>
+                    <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm print:border-slate-200 print:no-clip">
+                      <div className="divide-y divide-slate-50 print:no-clip">
+                        {selectedDayData.filter(d => !['Presente', 'Falta'].includes(d.status)).map(record => (
+                          <DetailRow key={record.collaborator_name} record={record} updateDetail={updateDetail} updatingId={updatingId} />
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
+            </div>
+
+            <div className="px-10 py-6 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center print:hidden">
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                 SISTEMA OPERACIONAL &bull; {new Date().toLocaleTimeString('pt-BR')}
+               </p>
+               <button 
+                onClick={() => setIsModalOpen(false)}
+                className="bg-[#004354] text-white px-10 py-3 rounded-2xl font-manrope font-bold shadow-lg shadow-[#004354]/20 hover:scale-105 active:scale-95 transition-all"
+               >
+                 Fechar Relatório
+               </button>
+            </div>
+          </div>
+        </div>
+      </>
+      )}
     </Layout>
+  );
+}
+
+function DetailRow({ record, updateDetail, updatingId }: { record: any, updateDetail: any, updatingId: string | null }) {
+  const isUpdating = updatingId === record.collaborator_name;
+  
+  return (
+    <div className="group hover:bg-slate-50/50 transition-colors flex items-center print:break-inside-avoid-page print:page-break-inside-avoid">
+      <div className="flex-1 px-6 py-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-[10px] text-[#004354] uppercase print:hidden">
+            {record.collaborator_name.substring(0, 2)}
+          </div>
+          <div>
+            <h5 className="text-xs font-black text-[#111d23] tracking-tight">{record.collaborator_name}</h5>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">{record.cargo || 'Funcional'} &bull; <span className="text-teal-600">{record.centro_custo}</span></p>
+          </div>
+          {isUpdating && <RefreshCw className="w-3 h-3 text-[#004354] animate-spin ml-auto" />}
+        </div>
+      </div>
+      <div className="w-20 px-6 py-4 text-center">
+        <input 
+          key={record.overtime} // Force internal update if database refreshes
+          type="text" 
+          defaultValue={record.overtime ? (isNaN(Number(record.overtime)) ? record.overtime : record.overtime + 'h') : '0h'}
+          onBlur={(e) => {
+            let val = e.target.value;
+            if (val && !isNaN(Number(val))) val = val + 'h';
+            if (val !== record.overtime) updateDetail(record, 'overtime', val);
+          }}
+          placeholder="0h" 
+          className="w-full bg-transparent border-none text-center text-xs text-[#004354] focus:ring-0 outline-none font-black placeholder:text-slate-200" 
+        />
+      </div>
+      <div className="flex-1 px-6 py-4">
+        <input 
+          type="text" 
+          defaultValue={record.comment}
+          onBlur={(e) => {
+            if (e.target.value !== record.comment) updateDetail(record, 'comment', e.target.value);
+          }}
+          placeholder="Adicionar nota..." 
+          className="w-full bg-transparent border-none text-xs text-slate-500 focus:ring-0 outline-none font-medium placeholder:text-slate-200" 
+        />
+      </div>
+    </div>
   );
 }
