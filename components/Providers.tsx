@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { usePathname, useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
@@ -38,9 +38,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  // authLoading: apenas bloqueia até saber se tem sessão ou não
   const [authLoading, setAuthLoading] = useState(true);
-  // hasSession: null = ainda não sabemos, true = tem sessão, false = definitivamente sem sessão
-  const hasSessionRef = useRef<boolean | null>(null);
+  // profileLoading: carrega perfil/terminal em background sem bloquear UI
+  const [profileLoading, setProfileLoading] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -55,14 +56,21 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   };
 
   async function loadProfileAndTerminal(userId: string) {
+    setProfileLoading(true);
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('terminal_id, role')
         .eq('id', userId)
         .single();
 
-      if (!profile) return;
+      if (error || !profile) {
+        console.warn('Providers: Sem perfil ou erro:', error?.message);
+        // Se não conseguir buscar perfil, tenta usar super_admin como fallback
+        // para não bloquear o app
+        setUserRole('super_admin');
+        return;
+      }
 
       setUserRole(profile.role);
 
@@ -88,61 +96,34 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.error('Providers: Erro ao carregar perfil:', err);
+    } finally {
+      setProfileLoading(false);
     }
   }
 
   useEffect(() => {
-    // Fallback: Se após 10s ainda não tivermos uma resposta definitiva,
-    // desbloqueia a UI de qualquer forma
-    const globalTimeout = setTimeout(() => {
-      console.warn('Providers: Timeout global atingido. Desbloqueando UI.');
-      setAuthLoading(false);
-    }, 10000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
+      (event, currentSession) => {
         console.log('Providers: Evento:', event, '| Sessão:', !!currentSession);
 
-        if (event === 'INITIAL_SESSION') {
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          setSession(currentSession);
+
+          // Desbloqueia a UI imediatamente — não espera o perfil carregar
+          setAuthLoading(false);
+
+          // Carrega perfil em background se logado
           if (currentSession) {
-            // Tem sessão imediatamente — caminho normal
-            hasSessionRef.current = true;
-            setSession(currentSession);
-            await loadProfileAndTerminal(currentSession.user.id);
-            clearTimeout(globalTimeout);
-            setAuthLoading(false);
-          } else {
-            // Sem sessão no INITIAL_SESSION — pode ser que o SIGNED_IN chegue logo
-            // Aguardamos 3s antes de decidir fazer redirect
-            hasSessionRef.current = false;
-            setTimeout(() => {
-              if (hasSessionRef.current === false) {
-                // Após 3s ainda sem sessão: definitivamente não logado
-                clearTimeout(globalTimeout);
-                setAuthLoading(false);
-              }
-            }, 3000);
+            loadProfileAndTerminal(currentSession.user.id);
           }
           return;
         }
 
-        if (event === 'SIGNED_IN' && currentSession) {
-          // Sessão chegou (pode ter sido após INITIAL_SESSION null no Vercel)
-          hasSessionRef.current = true;
-          setSession(currentSession);
-          await loadProfileAndTerminal(currentSession.user.id);
-          clearTimeout(globalTimeout);
-          setAuthLoading(false);
-          return;
-        }
-
         if (event === 'SIGNED_OUT') {
-          hasSessionRef.current = false;
           setSession(null);
           setUserRole(null);
           setActiveTerminal(null);
           setTerminalId(null);
-          clearTimeout(globalTimeout);
           setAuthLoading(false);
           router.replace('/login');
           return;
@@ -151,7 +132,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
 
     return () => {
-      clearTimeout(globalTimeout);
       subscription.unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,7 +144,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [authLoading, session, pathname, router]);
 
-  // Tela de carregamento inicial
+  // Tela de carregamento inicial (apenas até saber se tem sessão)
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#001a23] flex items-center justify-center">
@@ -173,11 +153,23 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Aguardando redirecionamento para login
+  // Sem sessão fora do login
   if (!session && pathname !== '/login') {
     return (
       <div className="min-h-screen bg-[#001a23] flex items-center justify-center">
         <RefreshCw className="w-8 h-8 text-teal-500 animate-spin opacity-20" />
+      </div>
+    );
+  }
+
+  // Super admin: aguardando perfil carregar para saber se precisa de seleção de terminal
+  if (session && profileLoading && pathname !== '/login') {
+    return (
+      <div className="min-h-screen bg-[#001a23] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-8 h-8 text-teal-500 animate-spin opacity-40" />
+          <p className="text-teal-500/50 text-xs uppercase tracking-widest font-bold">Carregando perfil...</p>
+        </div>
       </div>
     );
   }
