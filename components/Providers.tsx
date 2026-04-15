@@ -55,10 +55,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const getInitialSession = async () => {
+    // 1. Initial Check
+    async function initSession() {
+      console.log('Providers: Initializing session...');
       try {
         const { data } = await supabase.auth.getSession();
         const initialSession = data?.session;
+        console.log('Providers: Session found:', !!initialSession);
         setSession(initialSession);
         
         if (initialSession) {
@@ -69,6 +72,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             .single();
 
           if (profile) {
+            console.log('Providers: Profile found, role:', profile.role);
             setUserRole(profile.role);
             
             const storedTerminalId = localStorage.getItem('active_terminal_id');
@@ -89,26 +93,33 @@ export default function Providers({ children }: { children: React.ReactNode }) {
               }
             }
           }
-        } else if (pathname !== '/login') {
-          router.push('/login');
+        } else {
+          console.log('Providers: No session, path:', pathname);
+          if (pathname !== '/login') {
+            router.replace('/login');
+          }
         }
       } catch (err) {
-        console.error('Session/Profile error:', err);
+        console.error('Providers: Init error:', err);
       } finally {
         setAuthLoading(false);
         setLoading(false);
+        console.log('Providers: Auth loading finished.');
       }
-    };
+    }
 
-    getInitialSession();
+    initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session) {
+    // 2. Auth Listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      console.log('Providers: Auth event:', event);
+      setSession(currentSession);
+      
+      if (currentSession) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('terminal_id, role')
-          .eq('id', session.user.id)
+          .eq('id', currentSession.user.id)
           .single();
         
         if (profile) {
@@ -122,12 +133,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           }
         }
       } else if (pathname !== '/login') {
-        router.push('/login');
+        router.replace('/login');
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [pathname, router]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []); // Run only once on mount
 
   if (authLoading) {
     return (
