@@ -22,7 +22,6 @@ const menuItems = [
   { name: 'Insumos & Extras', icon: Coffee, href: '/extras' },
   { name: 'Histórico de Refeições', icon: Utensils, href: '/historico' },
   { name: 'Gestão de Colaboradores', icon: Users, href: '/gestao' },
-  { name: 'Configurações', icon: Settings, href: '/configuracoes' },
 ];
 
 interface SidebarProps {

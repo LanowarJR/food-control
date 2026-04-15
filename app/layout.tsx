@@ -22,6 +22,8 @@ export const metadata: Metadata = {
   description: 'Sistema de Gestão de Refeições e Presença (Lunch Control)',
 };
 
+import Providers from '@/components/Providers';
+
 export default function RootLayout({
   children,
 }: {
@@ -30,7 +32,9 @@ export default function RootLayout({
   return (
     <html lang="pt-br" suppressHydrationWarning className={`${inter.variable} ${manrope.variable} ${workSans.variable}`}>
       <body className="bg-[#f4faff] text-[#111d23] font-body antialiased">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );
