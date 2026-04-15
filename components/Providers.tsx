@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
 import { usePathname, useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
@@ -39,6 +39,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  // hasSession: null = ainda não sabemos, true = tem sessão, false = definitivamente sem sessão
+  const hasSessionRef = useRef<boolean | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -52,7 +54,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     }
   };
 
-  async function loadProfileAndTerminal(userId: string, role?: string) {
+  async function loadProfileAndTerminal(userId: string) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -62,14 +64,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
       if (!profile) return;
 
-      const resolvedRole = role || profile.role;
-      setUserRole(resolvedRole);
+      setUserRole(profile.role);
 
       const storedTerminalId = typeof window !== 'undefined'
         ? localStorage.getItem('active_terminal_id')
         : null;
 
-      const targetId = resolvedRole === 'super_admin'
+      const targetId = profile.role === 'super_admin'
         ? (storedTerminalId || null)
         : profile.terminal_id;
 
@@ -91,37 +92,58 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // Usa APENAS o onAuthStateChange como fonte de verdade.
-    // O INITIAL_SESSION é disparado imediatamente com a sessão atual (ou null).
+    // Fallback: Se após 10s ainda não tivermos uma resposta definitiva,
+    // desbloqueia a UI de qualquer forma
+    const globalTimeout = setTimeout(() => {
+      console.warn('Providers: Timeout global atingido. Desbloqueando UI.');
+      setAuthLoading(false);
+    }, 10000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log('Providers: Evento:', event, '| Sessão:', !!currentSession);
 
         if (event === 'INITIAL_SESSION') {
-          // Este evento é disparado uma única vez ao montar o componente
-          setSession(currentSession);
-
           if (currentSession) {
+            // Tem sessão imediatamente — caminho normal
+            hasSessionRef.current = true;
+            setSession(currentSession);
             await loadProfileAndTerminal(currentSession.user.id);
+            clearTimeout(globalTimeout);
+            setAuthLoading(false);
+          } else {
+            // Sem sessão no INITIAL_SESSION — pode ser que o SIGNED_IN chegue logo
+            // Aguardamos 3s antes de decidir fazer redirect
+            hasSessionRef.current = false;
+            setTimeout(() => {
+              if (hasSessionRef.current === false) {
+                // Após 3s ainda sem sessão: definitivamente não logado
+                clearTimeout(globalTimeout);
+                setAuthLoading(false);
+              }
+            }, 3000);
           }
-
-          // Independente de ter sessão ou não, desbloqueia a UI
-          setAuthLoading(false);
-          console.log('Providers: UI desbloqueada.');
           return;
         }
 
         if (event === 'SIGNED_IN' && currentSession) {
+          // Sessão chegou (pode ter sido após INITIAL_SESSION null no Vercel)
+          hasSessionRef.current = true;
           setSession(currentSession);
           await loadProfileAndTerminal(currentSession.user.id);
+          clearTimeout(globalTimeout);
+          setAuthLoading(false);
           return;
         }
 
         if (event === 'SIGNED_OUT') {
+          hasSessionRef.current = false;
           setSession(null);
           setUserRole(null);
           setActiveTerminal(null);
           setTerminalId(null);
+          clearTimeout(globalTimeout);
+          setAuthLoading(false);
           router.replace('/login');
           return;
         }
@@ -129,12 +151,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
 
     return () => {
+      clearTimeout(globalTimeout);
       subscription.unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Redireciona para login se a UI desbloqueou e não há sessão
+  // Redireciona para login somente quando a UI desbloqueou e não há sessão
   useEffect(() => {
     if (!authLoading && !session && pathname !== '/login') {
       router.replace('/login');
