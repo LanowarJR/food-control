@@ -2,11 +2,10 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter, usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
 import TerminalSelector from './TerminalSelector';
 
-// Context for Terminal
 export interface Terminal {
   id: string;
   name: string;
@@ -39,10 +38,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [terminalId, setTerminalId] = useState<string | null>(null);
   const [activeTerminal, setActiveTerminal] = useState<Terminal | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
-  const router = useRouter();
   const pathname = usePathname();
+  const router = useRouter();
 
   const handleSelectTerminal = (terminal: Terminal | null) => {
     setActiveTerminal(terminal);
@@ -54,112 +52,96 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     }
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    
-    // 1. Initial Check
-    async function initSession() {
-      console.log('Providers: Iniciando verificação de sessão...');
-      
-      // Timeout de segurança de 8 segundos para não travar a UI se o Supabase demorar
-      const timeout = setTimeout(() => {
-        if (isMounted && authLoading) {
-          console.warn('Providers: Verificação de sessão excedeu o tempo limite. Desbloqueando UI...');
-          setAuthLoading(false);
-          setLoading(false);
-        }
-      }, 8000);
+  async function loadProfileAndTerminal(userId: string, role?: string) {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('terminal_id, role')
+        .eq('id', userId)
+        .single();
 
-      try {
-        const { data, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
+      if (!profile) return;
 
-        const initialSession = data?.session;
-        console.log('Providers: Sessão encontrada:', !!initialSession);
-        
-        if (isMounted) setSession(initialSession);
-        
-        if (initialSession) {
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('terminal_id, role')
-            .eq('id', initialSession.user.id)
-            .single();
+      const resolvedRole = role || profile.role;
+      setUserRole(resolvedRole);
 
-          if (profileError) {
-             console.warn('Providers: Erro ao buscar perfil:', profileError.message);
-          }
+      const storedTerminalId = typeof window !== 'undefined'
+        ? localStorage.getItem('active_terminal_id')
+        : null;
 
-          if (profile && isMounted) {
-            console.log('Providers: Perfil encontrado, role:', profile.role);
-            setUserRole(profile.role);
-            
-            const storedTerminalId = typeof window !== 'undefined' ? localStorage.getItem('active_terminal_id') : null;
-            const targetId = profile.role === 'super_admin' ? (storedTerminalId || null) : profile.terminal_id;
-            
-            if (targetId) {
-              const { data: terminalData } = await supabase
-                .from('terminals')
-                .select('*')
-                .eq('id', targetId)
-                .single();
-              
-              if (terminalData && isMounted) {
-                setActiveTerminal(terminalData);
-                setTerminalId(terminalData.id);
-              } else if (profile.role !== 'super_admin' && isMounted) {
-                 setTerminalId(profile.terminal_id);
-              }
-            }
-          }
-        } else {
-          console.log('Providers: Sem sessão ativa.');
-        }
-      } catch (err) {
-        console.error('Providers: Falha na inicialização:', err);
-      } finally {
-        clearTimeout(timeout);
-        if (isMounted) {
-          setAuthLoading(false);
-          setLoading(false);
-          console.log('Providers: Carregamento de autenticação finalizado.');
-        }
-      }
-    }
+      const targetId = resolvedRole === 'super_admin'
+        ? (storedTerminalId || null)
+        : profile.terminal_id;
 
-    initSession();
-
-    // 2. Auth Listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log('Providers: Evento de Auth:', event);
-      if (isMounted) setSession(currentSession);
-      
-      if (currentSession && isMounted) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('terminal_id, role')
-          .eq('id', currentSession.user.id)
+      if (targetId) {
+        const { data: terminalData } = await supabase
+          .from('terminals')
+          .select('*')
+          .eq('id', targetId)
           .single();
-        
-        if (profile && isMounted) {
-          setUserRole(profile.role);
-          if (profile.role !== 'super_admin') {
-             const { data: tData } = await supabase.from('terminals').select('*').eq('id', profile.terminal_id).single();
-             if (tData && isMounted) {
-                setActiveTerminal(tData);
-                setTerminalId(tData.id);
-             }
-          }
+
+        if (terminalData) {
+          setActiveTerminal(terminalData);
+          setTerminalId(terminalData.id);
         }
       }
-    });
+    } catch (err) {
+      console.error('Providers: Erro ao carregar perfil:', err);
+    }
+  }
+
+  useEffect(() => {
+    // Usa APENAS o onAuthStateChange como fonte de verdade.
+    // O INITIAL_SESSION é disparado imediatamente com a sessão atual (ou null).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log('Providers: Evento:', event, '| Sessão:', !!currentSession);
+
+        if (event === 'INITIAL_SESSION') {
+          // Este evento é disparado uma única vez ao montar o componente
+          setSession(currentSession);
+
+          if (currentSession) {
+            await loadProfileAndTerminal(currentSession.user.id);
+          }
+
+          // Independente de ter sessão ou não, desbloqueia a UI
+          setAuthLoading(false);
+          console.log('Providers: UI desbloqueada.');
+          return;
+        }
+
+        if (event === 'SIGNED_IN' && currentSession) {
+          setSession(currentSession);
+          await loadProfileAndTerminal(currentSession.user.id);
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUserRole(null);
+          setActiveTerminal(null);
+          setTerminalId(null);
+          router.replace('/login');
+          return;
+        }
+      }
+    );
 
     return () => {
-      isMounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Run only once on mount
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  // Redireciona para login se a UI desbloqueou e não há sessão
+  useEffect(() => {
+    if (!authLoading && !session && pathname !== '/login') {
+      router.replace('/login');
+    }
+  }, [authLoading, session, pathname, router]);
+
+  // Tela de carregamento inicial
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#001a23] flex items-center justify-center">
@@ -168,7 +150,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Se não estiver logado e não estiver na página de login, o useEffect vai redirecionar
+  // Aguardando redirecionamento para login
   if (!session && pathname !== '/login') {
     return (
       <div className="min-h-screen bg-[#001a23] flex items-center justify-center">
@@ -177,17 +159,17 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Se for super_admin e não tiver terminal selecionado (e não for página de login)
+  // Super admin sem terminal selecionado
   if (session && userRole === 'super_admin' && !terminalId && pathname !== '/login') {
     return (
-      <TerminalContext.Provider value={{ terminalId, activeTerminal, loading, userRole, session, setTerminalId: handleSelectTerminal }}>
+      <TerminalContext.Provider value={{ terminalId, activeTerminal, loading: false, userRole, session, setTerminalId: handleSelectTerminal }}>
         <TerminalSelector onSelect={handleSelectTerminal} />
       </TerminalContext.Provider>
     );
   }
 
   return (
-    <TerminalContext.Provider value={{ terminalId, activeTerminal, loading, userRole, session, setTerminalId: handleSelectTerminal }}>
+    <TerminalContext.Provider value={{ terminalId, activeTerminal, loading: false, userRole, session, setTerminalId: handleSelectTerminal }}>
       {children}
     </TerminalContext.Provider>
   );
