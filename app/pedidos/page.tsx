@@ -33,6 +33,7 @@ export default function PedidosPage() {
   const [obs, setObs] = useState('');
 
   const fetchRealData = useCallback(async () => {
+    if (!terminalId) return;
     setLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];

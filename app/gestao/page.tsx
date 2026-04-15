@@ -52,6 +52,7 @@ export default function GestaoPage() {
   }, [terminalId]);
 
   const fetchEmployees = React.useCallback(async () => {
+    if (!terminalId) return;
     setLoading(true);
     try {
       // 1. Pega contratos
