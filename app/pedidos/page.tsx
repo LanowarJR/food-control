@@ -42,7 +42,7 @@ export default function PedidosPage() {
       const { data: colabData, error: colabError } = await supabase
         .from('collaborators')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
       if (colabError) throw colabError;
 
       // Deduplicate base (mesma lógica do dashboard principal)
@@ -59,7 +59,7 @@ export default function PedidosPage() {
         .from('daily_attendance')
         .select('*')
         .eq('date', today)
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
         
       if (attError && attError.code === '42703') {
         const { data: attAlt } = await supabase

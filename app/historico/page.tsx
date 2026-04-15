@@ -57,7 +57,7 @@ export default function HistoricoPage() {
       const { data: mData, error } = await supabase
         .from('meal_history')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+        .eq('terminal_id', terminalId)
         .order('date', { ascending: false });
         
       if (error && error.code === '42703') {
@@ -85,13 +85,13 @@ export default function HistoricoPage() {
     setModalLoading(true);
     try {
       // 1. Fetch base collaborators (same logic as dashboard)
-      const { data: colabData } = await supabase.from('collaborators').select('*').or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+      const { data: colabData } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId);
       
       let mappings: any[] = [];
       const { data: mapData, error: mapErr } = await supabase
         .from('food_cost_mapping')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
       if (mapErr && mapErr.code === '42703') {
         const { data: mapAlt } = await supabase.from('food_cost_mapping').select('*');
         mappings = mapAlt || [];
@@ -121,7 +121,7 @@ export default function HistoricoPage() {
         .from('daily_attendance')
         .select('*')
         .eq('date', date)
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
       
       if (attError && attError.code === '42703') {
         const { data: attAlt } = await supabase

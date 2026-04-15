@@ -71,7 +71,7 @@ export default function DailyControl() {
       const { data: colabData, error: colabError } = await supabase
         .from('collaborators')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
         
       if (colabError) throw colabError;
 
@@ -80,7 +80,7 @@ export default function DailyControl() {
       const { data: mData, error: mapErr } = await supabase
         .from('food_cost_mapping')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
       
       if (mapErr && mapErr.code === '42703') {
         const { data: mDataAlt } = await supabase.from('food_cost_mapping').select('*');
@@ -118,7 +118,7 @@ export default function DailyControl() {
         .from('daily_attendance')
         .select('*')
         .eq('date', currentDate)
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
         
       if (attError && attError.code === '42703') {
         const { data: attDataAlt } = await supabase

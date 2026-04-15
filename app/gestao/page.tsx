@@ -37,14 +37,14 @@ export default function GestaoPage() {
       const { data, error } = await supabase
         .from('contracts')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+        .eq('terminal_id', terminalId)
         .order('contract_name', { ascending: true });
       if (error) {
          // Fallback se por acaso a ordenação falhar, busca sem ordenar
          const { data: altData } = await supabase
            .from('contracts')
            .select('*')
-           .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+           .eq('terminal_id', terminalId);
          if (altData) {
             setContracts(altData.map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
          } else {
@@ -70,14 +70,14 @@ export default function GestaoPage() {
       const { data, error } = await supabase
         .from('collaborators')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+        .eq('terminal_id', terminalId)
         .order('name', { ascending: true });
       
       if (error) {
         const { data: dataAlt, error: errorAlt } = await supabase
           .from('collaborators')
           .select('*')
-          .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+          .eq('terminal_id', terminalId)
           .order('nome', { ascending: true });
         if (errorAlt) throw errorAlt;
         colabData = dataAlt || [];
@@ -90,7 +90,7 @@ export default function GestaoPage() {
       const { data: mData, error: mapErr } = await supabase
         .from('food_cost_mapping')
         .select('*')
-        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        .eq('terminal_id', terminalId);
       
       if (mapErr && mapErr.code === '42703') {
         const { data: mDataAlt } = await supabase.from('food_cost_mapping').select('*');
