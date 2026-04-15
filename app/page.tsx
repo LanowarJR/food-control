@@ -71,16 +71,28 @@ export default function DailyControl() {
       const { data: colabData, error: colabError } = await supabase
         .from('collaborators')
         .select('*')
-        .eq('terminal_id', terminalId);
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
         
       if (colabError) throw colabError;
 
       // Pega os centros de custo personalizados
-      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
-      if (mapErr && mapErr.code !== '42P01') throw mapErr;
+      let mappings: any[] = [];
+      const { data: mData, error: mapErr } = await supabase
+        .from('food_cost_mapping')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+      
+      if (mapErr && mapErr.code === '42703') {
+        const { data: mDataAlt } = await supabase.from('food_cost_mapping').select('*');
+        mappings = mDataAlt || [];
+      } else if (mapErr && mapErr.code !== '42P01') {
+        throw mapErr;
+      } else {
+        mappings = mData || [];
+      }
       
       const mapHash = new Map();
-      (mappings || []).forEach(m => {
+      mappings.forEach(m => {
         mapHash.set(m.collaborator_name, m.contract_name);
       });
 
@@ -101,16 +113,27 @@ export default function DailyControl() {
       const uniqueColabs = Array.from(dedupMap.values());
 
       // 2. Fetch daily_attendance for currentDate
-      const { data: attendanceData, error: attError } = await supabase
+      let attendanceData: any[] = [];
+      const { data: attData, error: attError } = await supabase
         .from('daily_attendance')
         .select('*')
         .eq('date', currentDate)
-        .eq('terminal_id', terminalId);
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
         
-      if (attError && attError.code !== '42P01') throw attError;
+      if (attError && attError.code === '42703') {
+        const { data: attDataAlt } = await supabase
+          .from('daily_attendance')
+          .select('*')
+          .eq('date', currentDate);
+        attendanceData = attDataAlt || [];
+      } else if (attError && attError.code !== '42P01') {
+        throw attError;
+      } else {
+        attendanceData = attData || [];
+      }
 
       const attendanceMap = new Map();
-      (attendanceData || []).forEach(att => {
+      attendanceData.forEach(att => {
         attendanceMap.set(att.collaborator_name, att);
       });
 

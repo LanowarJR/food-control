@@ -39,7 +39,10 @@ export default function PedidosPage() {
       const today = new Date().toISOString().split('T')[0];
 
       // 1. Fetch base collaborators
-      const { data: colabData, error: colabError } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId);
+      const { data: colabData, error: colabError } = await supabase
+        .from('collaborators')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
       if (colabError) throw colabError;
 
       // Deduplicate base (mesma lógica do dashboard principal)
@@ -51,12 +54,24 @@ export default function PedidosPage() {
       const uniqueColabs = Array.from(dedupMap.values());
 
       // 2. Fetch presenças e status do dia
-      const { data: attendanceData, error: attError } = await supabase
+      let attendanceData: any[] = [];
+      const { data: attData, error: attError } = await supabase
         .from('daily_attendance')
         .select('*')
         .eq('date', today)
-        .eq('terminal_id', terminalId);
-      if (attError && attError.code !== '42P01') throw attError;
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+        
+      if (attError && attError.code === '42703') {
+        const { data: attAlt } = await supabase
+          .from('daily_attendance')
+          .select('*')
+          .eq('date', today);
+        attendanceData = attAlt || [];
+      } else if (attError && attError.code !== '42P01') {
+        throw attError;
+      } else {
+        attendanceData = attData || [];
+      }
       
       const attendanceMap = new Map();
       (attendanceData || []).forEach(att => {

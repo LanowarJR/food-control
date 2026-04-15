@@ -34,6 +34,7 @@ export default function TerminalSelector({ onSelect }: TerminalSelectorProps) {
   useEffect(() => {
     async function fetchTerminals() {
       try {
+        console.log('TerminalSelector: Inicando busca...');
         const { data, error } = await supabase
           .from('terminals')
           .select('*')
@@ -42,8 +43,9 @@ export default function TerminalSelector({ onSelect }: TerminalSelectorProps) {
         if (error) throw error;
         setTerminals(data || []);
       } catch (err) {
-        console.error('Erro ao buscar terminais:', err);
+        console.error('TerminalSelector Error:', err);
       } finally {
+        console.log('TerminalSelector: Loading finished.');
         setLoading(false);
       }
     }

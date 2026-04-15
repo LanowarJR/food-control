@@ -53,17 +53,25 @@ export default function HistoricoPage() {
     if (!terminalId) return;
     setLoading(true);
     try {
-      const { data: remoteData, error } = await supabase
+      let remoteData: any[] = [];
+      const { data: mData, error } = await supabase
         .from('meal_history')
         .select('*')
-        .eq('terminal_id', terminalId)
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
         .order('date', { ascending: false });
         
-      if (error) {
+      if (error && error.code === '42703') {
+        const { data: mDataAlt } = await supabase
+          .from('meal_history')
+          .select('*')
+          .order('date', { ascending: false });
+        remoteData = mDataAlt || [];
+      } else if (error) {
         console.warn('Erro ao carregar histórico:', error.message);
       } else {
-        setData(remoteData || []);
+        remoteData = mData || [];
       }
+      setData(remoteData);
     } catch (err) {
       console.error('Fallback error:', err);
     } finally {
@@ -77,11 +85,22 @@ export default function HistoricoPage() {
     setModalLoading(true);
     try {
       // 1. Fetch base collaborators (same logic as dashboard)
-      const { data: colabData } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId);
-      const { data: mappings } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
+      const { data: colabData } = await supabase.from('collaborators').select('*').or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+      
+      let mappings: any[] = [];
+      const { data: mapData, error: mapErr } = await supabase
+        .from('food_cost_mapping')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+      if (mapErr && mapErr.code === '42703') {
+        const { data: mapAlt } = await supabase.from('food_cost_mapping').select('*');
+        mappings = mapAlt || [];
+      } else {
+        mappings = mapData || [];
+      }
       
       const mapHash = new Map();
-      (mappings || []).forEach(m => mapHash.set(m.collaborator_name, m.contract_name));
+      mappings.forEach(m => mapHash.set(m.collaborator_name, m.contract_name));
 
       const dedupMap = new Map();
       (colabData || []).forEach(emp => {
@@ -97,16 +116,27 @@ export default function HistoricoPage() {
       const uniqueColabs = Array.from(dedupMap.values());
 
       // 2. Fetch daily_attendance for the selected date
-      const { data: attData, error } = await supabase
+      let attendanceData: any[] = [];
+      const { data: attData, error: attError } = await supabase
         .from('daily_attendance')
         .select('*')
         .eq('date', date)
-        .eq('terminal_id', terminalId);
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
       
-      if (error) throw error;
+      if (attError && attError.code === '42703') {
+        const { data: attAlt } = await supabase
+          .from('daily_attendance')
+          .select('*')
+          .eq('date', date);
+        attendanceData = attAlt || [];
+      } else if (attError) {
+        throw attError;
+      } else {
+        attendanceData = attData || [];
+      }
       
       const attendanceMap = new Map();
-      (attData || []).forEach(att => attendanceMap.set(att.collaborator_name, att));
+      attendanceData.forEach(att => attendanceMap.set(att.collaborator_name, att));
 
       // 3. Merge Base + Daily (Exact same logic as dashboard)
       const merged = uniqueColabs.map(emp => {

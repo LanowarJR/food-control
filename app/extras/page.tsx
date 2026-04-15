@@ -43,15 +43,27 @@ export default function ExtrasPage() {
       }
 
       // Pega Insumos Secundarios do Dia
-      const { data: mealsData, error: mealsErr } = await supabase
+      let mealsData: any[] = [];
+      const { data: mData, error: mealsErr } = await supabase
         .from('secondary_meals')
         .select('*')
         .eq('date', currentDate)
         .eq('terminal_id', terminalId)
         .order('created_at', { ascending: false });
 
-      if (mealsErr && mealsErr.code !== '42P01') throw mealsErr;
-      setItems(mealsData || []);
+      if (mealsErr && mealsErr.code === '42703') {
+        const { data: mDataAlt } = await supabase
+          .from('secondary_meals')
+          .select('*')
+          .eq('date', currentDate)
+          .order('created_at', { ascending: false });
+        mealsData = mDataAlt || [];
+      } else if (mealsErr && mealsErr.code !== '42P01') {
+        throw mealsErr;
+      } else {
+        mealsData = mData || [];
+      }
+      setItems(mealsData);
     } catch (err: any) {
       console.error('Erro ao buscar extras:', err);
     } finally {

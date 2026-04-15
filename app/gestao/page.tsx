@@ -34,10 +34,17 @@ export default function GestaoPage() {
     if (!terminalId) return;
     try {
       // O usuário informou que a coluna se chama contract_name
-      const { data, error } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId).order('contract_name', { ascending: true });
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+        .order('contract_name', { ascending: true });
       if (error) {
          // Fallback se por acaso a ordenação falhar, busca sem ordenar
-         const { data: altData } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId);
+         const { data: altData } = await supabase
+           .from('contracts')
+           .select('*')
+           .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
          if (altData) {
             setContracts(altData.map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
          } else {
@@ -60,10 +67,18 @@ export default function GestaoPage() {
 
       // 2. Pega base de colaboradores do TerminalFlow
       let colabData: any[] = [];
-      const { data, error } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId).order('name', { ascending: true });
+      const { data, error } = await supabase
+        .from('collaborators')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+        .order('name', { ascending: true });
       
       if (error) {
-        const { data: dataAlt, error: errorAlt } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId).order('nome', { ascending: true });
+        const { data: dataAlt, error: errorAlt } = await supabase
+          .from('collaborators')
+          .select('*')
+          .or(`terminal_id.eq.${terminalId},terminal_id.is.null`)
+          .order('nome', { ascending: true });
         if (errorAlt) throw errorAlt;
         colabData = dataAlt || [];
       } else {
@@ -71,11 +86,23 @@ export default function GestaoPage() {
       }
 
       // 3. Pega os mapeamentos seguros de custo do FoodControl
-      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
-      if (mapErr && mapErr.code !== '42P01') throw mapErr; // ignora se não existe ainda
+      let mappings: any[] = [];
+      const { data: mData, error: mapErr } = await supabase
+        .from('food_cost_mapping')
+        .select('*')
+        .or(`terminal_id.eq.${terminalId},terminal_id.is.null`);
+      
+      if (mapErr && mapErr.code === '42703') {
+        const { data: mDataAlt } = await supabase.from('food_cost_mapping').select('*');
+        mappings = mDataAlt || [];
+      } else if (mapErr && mapErr.code !== '42P01') {
+        throw mapErr;
+      } else {
+        mappings = mData || [];
+      }
       
       const mapHash = new Map();
-      (mappings || []).forEach(m => {
+      mappings.forEach(m => {
         mapHash.set(m.collaborator_name, m.contract_name);
       });
 
