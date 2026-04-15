@@ -55,27 +55,46 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    
     // 1. Initial Check
     async function initSession() {
-      console.log('Providers: Initializing session...');
+      console.log('Providers: Iniciando verificação de sessão...');
+      
+      // Timeout de segurança de 8 segundos para não travar a UI se o Supabase demorar
+      const timeout = setTimeout(() => {
+        if (isMounted && authLoading) {
+          console.warn('Providers: Verificação de sessão excedeu o tempo limite. Desbloqueando UI...');
+          setAuthLoading(false);
+          setLoading(false);
+        }
+      }, 8000);
+
       try {
-        const { data } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+
         const initialSession = data?.session;
-        console.log('Providers: Session found:', !!initialSession);
-        setSession(initialSession);
+        console.log('Providers: Sessão encontrada:', !!initialSession);
+        
+        if (isMounted) setSession(initialSession);
         
         if (initialSession) {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('terminal_id, role')
             .eq('id', initialSession.user.id)
             .single();
 
-          if (profile) {
-            console.log('Providers: Profile found, role:', profile.role);
+          if (profileError) {
+             console.warn('Providers: Erro ao buscar perfil:', profileError.message);
+          }
+
+          if (profile && isMounted) {
+            console.log('Providers: Perfil encontrado, role:', profile.role);
             setUserRole(profile.role);
             
-            const storedTerminalId = localStorage.getItem('active_terminal_id');
+            const storedTerminalId = typeof window !== 'undefined' ? localStorage.getItem('active_terminal_id') : null;
             const targetId = profile.role === 'super_admin' ? (storedTerminalId || null) : profile.terminal_id;
             
             if (targetId) {
@@ -85,26 +104,26 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 .eq('id', targetId)
                 .single();
               
-              if (terminalData) {
+              if (terminalData && isMounted) {
                 setActiveTerminal(terminalData);
                 setTerminalId(terminalData.id);
-              } else if (profile.role !== 'super_admin') {
+              } else if (profile.role !== 'super_admin' && isMounted) {
                  setTerminalId(profile.terminal_id);
               }
             }
           }
         } else {
-          console.log('Providers: No session, path:', pathname);
-          if (pathname !== '/login') {
-            router.replace('/login');
-          }
+          console.log('Providers: Sem sessão ativa.');
         }
       } catch (err) {
-        console.error('Providers: Init error:', err);
+        console.error('Providers: Falha na inicialização:', err);
       } finally {
-        setAuthLoading(false);
-        setLoading(false);
-        console.log('Providers: Auth loading finished.');
+        clearTimeout(timeout);
+        if (isMounted) {
+          setAuthLoading(false);
+          setLoading(false);
+          console.log('Providers: Carregamento de autenticação finalizado.');
+        }
       }
     }
 
@@ -112,32 +131,31 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
     // 2. Auth Listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
-      console.log('Providers: Auth event:', event);
-      setSession(currentSession);
+      console.log('Providers: Evento de Auth:', event);
+      if (isMounted) setSession(currentSession);
       
-      if (currentSession) {
+      if (currentSession && isMounted) {
         const { data: profile } = await supabase
           .from('profiles')
           .select('terminal_id, role')
           .eq('id', currentSession.user.id)
           .single();
         
-        if (profile) {
+        if (profile && isMounted) {
           setUserRole(profile.role);
           if (profile.role !== 'super_admin') {
              const { data: tData } = await supabase.from('terminals').select('*').eq('id', profile.terminal_id).single();
-             if (tData) {
+             if (tData && isMounted) {
                 setActiveTerminal(tData);
                 setTerminalId(tData.id);
              }
           }
         }
-      } else if (pathname !== '/login') {
-        router.replace('/login');
       }
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []); // Run only once on mount
