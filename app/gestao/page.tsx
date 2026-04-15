@@ -15,8 +15,10 @@ import {
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { useTerminal } from '@/components/Layout';
 
 export default function GestaoPage() {
+  const { terminalId } = useTerminal();
   const [employees, setEmployees] = React.useState<any[]>([]);
   const [contracts, setContracts] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -29,12 +31,13 @@ export default function GestaoPage() {
 
   // Fetch contracts for the dropdown
   const fetchContracts = React.useCallback(async () => {
+    if (!terminalId) return;
     try {
       // O usuário informou que a coluna se chama contract_name
-      const { data, error } = await supabase.from('contracts').select('*').order('contract_name', { ascending: true });
+      const { data, error } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId).order('contract_name', { ascending: true });
       if (error) {
          // Fallback se por acaso a ordenação falhar, busca sem ordenar
-         const { data: altData } = await supabase.from('contracts').select('*');
+         const { data: altData } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId);
          if (altData) {
             setContracts(altData.map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
          } else {
@@ -46,7 +49,7 @@ export default function GestaoPage() {
     } catch(err) {
        console.error("Erro ao buscar contratos:", err);
     }
-  }, []);
+  }, [terminalId]);
 
   const fetchEmployees = React.useCallback(async () => {
     setLoading(true);
@@ -56,10 +59,10 @@ export default function GestaoPage() {
 
       // 2. Pega base de colaboradores do TerminalFlow
       let colabData: any[] = [];
-      const { data, error } = await supabase.from('collaborators').select('*').order('name', { ascending: true });
+      const { data, error } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId).order('name', { ascending: true });
       
       if (error) {
-        const { data: dataAlt, error: errorAlt } = await supabase.from('collaborators').select('*').order('nome', { ascending: true });
+        const { data: dataAlt, error: errorAlt } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId).order('nome', { ascending: true });
         if (errorAlt) throw errorAlt;
         colabData = dataAlt || [];
       } else {
@@ -67,7 +70,7 @@ export default function GestaoPage() {
       }
 
       // 3. Pega os mapeamentos seguros de custo do FoodControl
-      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*');
+      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
       if (mapErr && mapErr.code !== '42P01') throw mapErr; // ignora se não existe ainda
       
       const mapHash = new Map();
@@ -100,7 +103,7 @@ export default function GestaoPage() {
     } finally {
       setLoading(false);
     }
-  }, [fetchContracts]);
+  }, [fetchContracts, terminalId]);
 
   React.useEffect(() => {
     fetchEmployees();
@@ -139,10 +142,11 @@ export default function GestaoPage() {
       // Upsert na nossa tabela isolada (NUNCA na collaborators)
       const payload = {
         collaborator_name: formData.nome,
-        contract_name: formData.centro_custo
+        contract_name: formData.centro_custo,
+        terminal_id: terminalId
       };
 
-      const { error } = await supabase.from('food_cost_mapping').upsert(payload, { onConflict: 'collaborator_name' } as any);
+      const { error } = await supabase.from('food_cost_mapping').upsert(payload, { onConflict: 'collaborator_name, terminal_id' } as any);
       
       if (error) {
         if (error.code === '42P01') {

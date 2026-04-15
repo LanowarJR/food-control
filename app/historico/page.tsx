@@ -34,8 +34,10 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useTerminal } from '@/components/Layout';
 
 export default function HistoricoPage() {
+  const { terminalId } = useTerminal();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,12 +49,14 @@ export default function HistoricoPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   // Load History from Supabase
-  const loadHistory = async () => {
+  const loadHistory = React.useCallback(async () => {
+    if (!terminalId) return;
     setLoading(true);
     try {
       const { data: remoteData, error } = await supabase
         .from('meal_history')
         .select('*')
+        .eq('terminal_id', terminalId)
         .order('date', { ascending: false });
         
       if (error) {
@@ -65,7 +69,7 @@ export default function HistoricoPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [terminalId]);
 
   const openDayDetails = async (date: string) => {
     setSelectedDate(date);
@@ -73,8 +77,8 @@ export default function HistoricoPage() {
     setModalLoading(true);
     try {
       // 1. Fetch base collaborators (same logic as dashboard)
-      const { data: colabData } = await supabase.from('collaborators').select('*');
-      const { data: mappings } = await supabase.from('food_cost_mapping').select('*');
+      const { data: colabData } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId);
+      const { data: mappings } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
       
       const mapHash = new Map();
       (mappings || []).forEach(m => mapHash.set(m.collaborator_name, m.contract_name));
@@ -96,7 +100,8 @@ export default function HistoricoPage() {
       const { data: attData, error } = await supabase
         .from('daily_attendance')
         .select('*')
-        .eq('date', date);
+        .eq('date', date)
+        .eq('terminal_id', terminalId);
       
       if (error) throw error;
       
@@ -152,12 +157,13 @@ export default function HistoricoPage() {
         collaborator_name: record.collaborator_name,
         status: field === 'status' ? value : record.status,
         comment: field === 'comment' ? value : record.comment,
-        overtime: field === 'overtime' ? value : record.overtime
+        overtime: field === 'overtime' ? value : record.overtime,
+        terminal_id: terminalId
       };
 
       const { data: upsertData, error } = await supabase
         .from('daily_attendance')
-        .upsert(payload, { onConflict: 'date, collaborator_name' } as any)
+        .upsert(payload, { onConflict: 'date, collaborator_name, terminal_id' } as any)
         .select();
 
       if (error) throw error;
@@ -177,7 +183,7 @@ export default function HistoricoPage() {
 
   useEffect(() => {
     loadHistory();
-  }, []);
+  }, [loadHistory]);
 
   // Calculate Chart Data (Last 7 Operative Days)
   const chartData = useMemo(() => {

@@ -12,8 +12,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { useTerminal } from '@/components/Layout';
 
 export default function PedidosPage() {
+  const { terminalId } = useTerminal();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -36,7 +38,7 @@ export default function PedidosPage() {
       const today = new Date().toISOString().split('T')[0];
 
       // 1. Fetch base collaborators
-      const { data: colabData, error: colabError } = await supabase.from('collaborators').select('*');
+      const { data: colabData, error: colabError } = await supabase.from('collaborators').select('*').eq('terminal_id', terminalId);
       if (colabError) throw colabError;
 
       // Deduplicate base (mesma lógica do dashboard principal)
@@ -51,7 +53,8 @@ export default function PedidosPage() {
       const { data: attendanceData, error: attError } = await supabase
         .from('daily_attendance')
         .select('*')
-        .eq('date', today);
+        .eq('date', today)
+        .eq('terminal_id', terminalId);
       if (attError && attError.code !== '42P01') throw attError;
       
       const attendanceMap = new Map();
@@ -79,7 +82,7 @@ export default function PedidosPage() {
       setTotalPresentes(nomesPresentes.size);
 
       // 4. Fetch de Mapeamento de Custos para rateio
-      const { data: mappings } = await supabase.from('food_cost_mapping').select('*');
+      const { data: mappings } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
       const mapHash = new Map();
       (mappings || []).forEach(m => {
         mapHash.set(m.collaborator_name, m.contract_name || 'Geral/Não Alocado');
@@ -104,7 +107,7 @@ export default function PedidosPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [terminalId]);
 
   useEffect(() => {
     fetchRealData();
@@ -126,10 +129,11 @@ export default function PedidosPage() {
         cost_center: 'Geral Consolidado',
         contract: 'Fechamento Total',
         obs: obs || `${prot1Name}: ${prot1Qty}, ${prot2Name}: ${prot2Qty}`,
-        status: 'Validated'
+        status: 'Validated',
+        terminal_id: terminalId
       };
       
-      const { error } = await supabase.from('meal_history').upsert([payload], { onConflict: 'date' } as any);
+      const { error } = await supabase.from('meal_history').upsert([payload], { onConflict: 'date, terminal_id' } as any);
       
       if (error) {
         if (error.code === '42P01') {

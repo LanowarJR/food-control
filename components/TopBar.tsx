@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { ShoppingCart, Menu, Bell, LogOut } from 'lucide-react';
+import { ShoppingCart, Menu, Bell, LogOut, Building2, ChevronDown, MapPin } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
+import { useTerminal } from './Layout';
 
 import Image from 'next/image';
 
@@ -16,13 +17,22 @@ interface TopBarProps {
 
 export default function TopBar({ toggleMobileMenu }: TopBarProps) {
   const router = useRouter();
+  const { activeTerminal, userRole, setTerminalId } = useTerminal();
 
   const handleLogout = async () => {
     if (confirm('Deseja realmente sair do sistema?')) {
       await supabase.auth.signOut();
+      localStorage.removeItem('active_terminal_id');
       router.push('/login');
     }
   };
+
+  const handleSwitchTerminal = () => {
+    if (confirm('Deseja alternar para outra unidade logística?')) {
+      setTerminalId(null);
+    }
+  };
+
   const today = new Date();
   const formattedDate = format(today, "dd 'de' MMMM", { locale: ptBR });
 
@@ -37,13 +47,32 @@ export default function TopBar({ toggleMobileMenu }: TopBarProps) {
           <Menu className="w-5 h-5" />
         </button>
         
-        <span className="text-lg md:text-xl font-black text-[#004354] tracking-tighter font-manrope whitespace-nowrap overflow-hidden text-ellipsis">
-          <span className="hidden sm:inline">Painel de Controle</span>
-          <span className="sm:hidden">FoodControl</span>
-        </span>
+        <div className="flex items-center gap-2">
+           <span className="text-lg md:text-xl font-black text-[#004354] tracking-tighter font-manrope whitespace-nowrap overflow-hidden text-ellipsis">
+             FoodControl
+           </span>
+           
+           {activeTerminal && (
+             <div className="flex items-center gap-2 ml-2 md:ml-4 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100 group">
+               <Building2 className="w-3.5 h-3.5 text-teal-600" />
+               <span className="text-[11px] font-black text-teal-700 uppercase tracking-tight">
+                 {activeTerminal.name}
+               </span>
+               {userRole === 'super_admin' && (
+                 <button 
+                   onClick={handleSwitchTerminal}
+                   className="ml-1 p-0.5 hover:bg-teal-200/50 rounded transition-colors text-teal-400 group-hover:text-teal-600"
+                   title="Trocar Unidade"
+                 >
+                   <ChevronDown className="w-3.5 h-3.5" />
+                 </button>
+               )}
+             </div>
+           )}
+        </div>
         
-        <div className="hidden md:block h-6 w-[1px] bg-slate-200 mx-2"></div>
-        <span className="hidden md:block font-manrope text-sm font-semibold tracking-tight text-slate-400 capitalize whitespace-nowrap overflow-hidden text-ellipsis">
+        <div className="hidden lg:block h-6 w-[1px] bg-slate-200 mx-2"></div>
+        <span className="hidden lg:block font-manrope text-sm font-semibold tracking-tight text-slate-400 capitalize whitespace-nowrap overflow-hidden text-ellipsis">
           {formattedDate}
         </span>
       </div>

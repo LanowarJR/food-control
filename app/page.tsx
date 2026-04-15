@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
+import { useTerminal } from '@/components/Layout';
 
 // Helper to get yesterday date string safely
 function getYesterdayDateStr(dateStr: string) {
@@ -24,6 +25,7 @@ function getYesterdayDateStr(dateStr: string) {
 }
 
 export default function DailyControl() {
+  const { terminalId } = useTerminal();
   const [employees, setEmployees] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,29 +51,32 @@ export default function DailyControl() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const fetchContracts = useCallback(async () => {
+    if (!terminalId) return;
     try {
-      const { data, error } = await supabase.from('contracts').select('*').order('contract_name', { ascending: true });
+      const { data, error } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId).order('contract_name', { ascending: true });
       if (error) {
-         const { data: altData } = await supabase.from('contracts').select('*');
+         const { data: altData } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId);
          if (altData) setContracts(altData.map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
       } else {
          setContracts((data || []).map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
       }
     } catch(err) {}
-  }, []);
+  }, [terminalId]);
 
   const fetchDailyData = useCallback(async () => {
+    if (!terminalId) return;
     setLoading(true);
     try {
       // 1. Fetch base collaborators
       const { data: colabData, error: colabError } = await supabase
         .from('collaborators')
-        .select('*');
+        .select('*')
+        .eq('terminal_id', terminalId);
         
       if (colabError) throw colabError;
 
       // Pega os centros de custo personalizados
-      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*');
+      const { data: mappings, error: mapErr } = await supabase.from('food_cost_mapping').select('*').eq('terminal_id', terminalId);
       if (mapErr && mapErr.code !== '42P01') throw mapErr;
       
       const mapHash = new Map();
@@ -99,7 +104,8 @@ export default function DailyControl() {
       const { data: attendanceData, error: attError } = await supabase
         .from('daily_attendance')
         .select('*')
-        .eq('date', currentDate);
+        .eq('date', currentDate)
+        .eq('terminal_id', terminalId);
         
       if (attError && attError.code !== '42P01') throw attError;
 
@@ -150,7 +156,7 @@ export default function DailyControl() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate]);
+  }, [currentDate, terminalId]);
 
   useEffect(() => {
     fetchContracts();
@@ -168,12 +174,13 @@ export default function DailyControl() {
         collaborator_name: nome,
         status: field === 'status' ? value : emp.status_presenca,
         comment: field === 'comment' ? value : emp.comment,
-        overtime: field === 'overtime' ? value : (emp.overtime || '')
+        overtime: field === 'overtime' ? value : (emp.overtime || ''),
+        terminal_id: terminalId
       };
 
       const { error } = await supabase
         .from('daily_attendance')
-        .upsert(payload, { onConflict: 'date, collaborator_name' });
+        .upsert(payload, { onConflict: 'date, collaborator_name, terminal_id' });
 
       if (error) {
         if (error.code === '42P01') {
@@ -199,7 +206,8 @@ export default function DailyControl() {
       const { data: sourceData, error: sourceError } = await supabase
         .from('daily_attendance')
         .select('*')
-        .eq('date', importSourceDate);
+        .eq('date', importSourceDate)
+        .eq('terminal_id', terminalId);
 
       if (sourceError) {
         if (sourceError.code === '42P01') throw new Error('A tabela daily_attendance não existe.');
@@ -216,12 +224,13 @@ export default function DailyControl() {
         collaborator_name: att.collaborator_name,
         status: att.status,
         comment: att.comment,
-        overtime: att.overtime || ''
+        overtime: att.overtime || '',
+        terminal_id: terminalId
       }));
 
       const { error: upsertError } = await supabase
         .from('daily_attendance')
-        .upsert(upserts, { onConflict: 'date, collaborator_name' });
+        .upsert(upserts, { onConflict: 'date, collaborator_name, terminal_id' });
 
       if (upsertError) throw upsertError;
       
@@ -259,9 +268,10 @@ export default function DailyControl() {
        // 1. Salva no cost_mapping universal
        const mapPayload = {
          collaborator_name: extraForm.nome,
-         contract_name: extraForm.centro_custo
+         contract_name: extraForm.centro_custo,
+         terminal_id: terminalId
        };
-       await supabase.from('food_cost_mapping').upsert(mapPayload, { onConflict: 'collaborator_name' } as any);
+       await supabase.from('food_cost_mapping').upsert(mapPayload, { onConflict: 'collaborator_name, terminal_id' } as any);
        
        // 2. Insere a presenca no Attendance de hoje
        const attPayload = {
@@ -269,9 +279,10 @@ export default function DailyControl() {
          collaborator_name: extraForm.nome,
          status: 'Presente',
          comment: 'Refeição Extra/Visitante',
-         overtime: ''
+         overtime: '',
+         terminal_id: terminalId
        };
-       await supabase.from('daily_attendance').upsert(attPayload, { onConflict: 'date, collaborator_name' });
+       await supabase.from('daily_attendance').upsert(attPayload, { onConflict: 'date, collaborator_name, terminal_id' });
 
        alert("Refeição Avulsa Adicionada com Sucesso!");
        setIsExtraOpen(false);
@@ -292,7 +303,8 @@ export default function DailyControl() {
         .from('daily_attendance')
         .delete()
         .eq('date', currentDate)
-        .eq('collaborator_name', nome);
+        .eq('collaborator_name', nome)
+        .eq('terminal_id', terminalId);
 
       if (error) throw error;
       

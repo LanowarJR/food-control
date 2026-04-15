@@ -13,8 +13,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
+import { useTerminal } from '@/components/Layout';
 
 export default function ExtrasPage() {
+  const { terminalId } = useTerminal();
   const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
@@ -28,12 +30,13 @@ export default function ExtrasPage() {
   const [formContract, setFormContract] = useState('');
 
   const fetchBaseData = useCallback(async () => {
+    if (!terminalId) return;
     setLoading(true);
     try {
       // Pega Contratos
-      const { data: ctData, error: ctErr } = await supabase.from('contracts').select('*').order('contract_name', { ascending: true });
+      const { data: ctData, error: ctErr } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId).order('contract_name', { ascending: true });
       if (ctErr) {
-        const { data: altCt } = await supabase.from('contracts').select('*');
+        const { data: altCt } = await supabase.from('contracts').select('*').eq('terminal_id', terminalId);
         if (altCt) setContracts(altCt.map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
       } else {
         setContracts((ctData || []).map(c => ({ ...c, name: c.contract_name || c.name || c.nome })));
@@ -44,6 +47,7 @@ export default function ExtrasPage() {
         .from('secondary_meals')
         .select('*')
         .eq('date', currentDate)
+        .eq('terminal_id', terminalId)
         .order('created_at', { ascending: false });
 
       if (mealsErr && mealsErr.code !== '42P01') throw mealsErr;
@@ -53,7 +57,7 @@ export default function ExtrasPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentDate]);
+  }, [currentDate, terminalId]);
 
   useEffect(() => {
     fetchBaseData();
@@ -73,7 +77,8 @@ export default function ExtrasPage() {
         meal_type: formType,
         item_name: formName,
         quantity: Math.max(1, formQty),
-        contract_name: formContract || null
+        contract_name: formContract || null,
+        terminal_id: terminalId
       };
 
       const { error } = await supabase.from('secondary_meals').insert([payload]);
@@ -96,7 +101,7 @@ export default function ExtrasPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Deseja realmente excluir este pedido?')) return;
     try {
-      const { error } = await supabase.from('secondary_meals').delete().eq('id', id);
+      const { error } = await supabase.from('secondary_meals').delete().eq('id', id).eq('terminal_id', terminalId);
       if (error) throw error;
       fetchBaseData();
     } catch (err: any) {

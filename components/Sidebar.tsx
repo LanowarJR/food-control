@@ -14,6 +14,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useTerminal } from './Layout';
+import { Building2 } from 'lucide-react';
 
 const menuItems = [
   { name: 'Controle Diário', icon: ClipboardCheck, href: '/' },
@@ -30,6 +32,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, closeSidebar }: SidebarProps) {
   const pathname = usePathname();
+  const { activeTerminal } = useTerminal();
 
   return (
     <aside className={cn(
@@ -87,9 +90,15 @@ export default function Sidebar({ isOpen, closeSidebar }: SidebarProps) {
       <div className="px-6 mt-auto">
         <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-slate-200/50 shadow-sm">
           <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Unidade Logística</p>
+          <div className="flex items-center gap-2 mb-2">
+            <Building2 className="w-3.5 h-3.5 text-[#004354]" />
+            <span className="text-xs font-black text-[#004354] uppercase truncate">
+              {activeTerminal?.name || 'Carregando...'}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse"></span>
-            <span className="text-xs font-black text-[#004354] uppercase">Sistema Online</span>
+            <span className="w-2 h-2 bg-teal-500 rounded-full animate-pulse"></span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Sistema Online</span>
           </div>
         </div>
       </div>
