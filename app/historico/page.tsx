@@ -191,17 +191,33 @@ export default function HistoricoPage() {
         terminal_id: terminalId
       };
 
-      const { data: upsertData, error } = await supabase
+      // Tenta UPDATE primeiro; se não existir o registro, faz INSERT
+      const { data: updatedRows, error: updateError } = await supabase
         .from('daily_attendance')
-        .upsert(payload, { onConflict: 'date, collaborator_name, terminal_id' } as any)
+        .update({ status: payload.status, comment: payload.comment, overtime: payload.overtime })
+        .eq('date', selectedDate)
+        .eq('collaborator_name', record.collaborator_name)
+        .eq('terminal_id', terminalId)
         .select();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      // Update local state with the new data (including ID if it was new)
+      let finalId = record.id;
+      if (!updatedRows || updatedRows.length === 0) {
+        // Registro não existia: insere um novo
+        const { data: inserted, error: insertError } = await supabase
+          .from('daily_attendance')
+          .insert([payload])
+          .select();
+        if (insertError) throw insertError;
+        finalId = inserted?.[0]?.id || finalId;
+      } else {
+        finalId = updatedRows[0]?.id || finalId;
+      }
+
       setSelectedDayData(prev => prev.map(d => 
         d.collaborator_name === record.collaborator_name 
-          ? { ...d, ...payload, id: upsertData?.[0]?.id || d.id } 
+          ? { ...d, ...payload, id: finalId } 
           : d
       ));
     } catch (err: any) {

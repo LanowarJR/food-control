@@ -139,8 +139,9 @@ export default function PedidosPage() {
 
     setSaving(true);
     try {
+      const today = new Date().toISOString().split('T')[0];
       const payload = {
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         meals: prot1Qty + prot2Qty || totalPresentes,
         cost_center: 'Geral Consolidado',
         contract: 'Fechamento Total',
@@ -148,18 +149,35 @@ export default function PedidosPage() {
         status: 'Validated',
         terminal_id: terminalId
       };
-      
-      const { error } = await supabase.from('meal_history').upsert([payload], { onConflict: 'date, terminal_id' } as any);
-      
-      if (error) {
-        if (error.code === '42P01') {
+
+      // Tenta UPDATE; se nenhuma linha for afetada, insere um novo registro
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('meal_history')
+        .update({ meals: payload.meals, obs: payload.obs, status: payload.status, cost_center: payload.cost_center })
+        .eq('date', today)
+        .eq('terminal_id', terminalId)
+        .select();
+
+      if (updateError) {
+        if (updateError.code === '42P01') {
           alert('Aviso: Tabela "meal_history" não encontrada no Supabase. Crie-a se desejar armazenar oficialmente.');
-        } else {
-          throw error;
+          return;
         }
-      } else {
-        alert('Pedido salvo no histórico de longo prazo!');
+        throw updateError;
       }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        const { error: insertError } = await supabase.from('meal_history').insert([payload]);
+        if (insertError) {
+          if (insertError.code === '42P01') {
+            alert('Aviso: Tabela "meal_history" não encontrada no Supabase. Crie-a se desejar armazenar oficialmente.');
+            return;
+          }
+          throw insertError;
+        }
+      }
+
+      alert('Pedido salvo no histórico de longo prazo!');
     } catch (err: any) {
       alert('Erro ao salvar: ' + err.message);
     } finally {

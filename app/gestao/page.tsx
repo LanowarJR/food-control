@@ -167,20 +167,35 @@ export default function GestaoPage() {
          return;
       }
 
-      // Upsert na nossa tabela isolada (NUNCA na collaborators)
+      // Tenta UPDATE; se não afetar nenhuma linha, insere um novo registro
       const payload = {
         collaborator_name: formData.nome,
         contract_name: formData.centro_custo,
         terminal_id: terminalId
       };
 
-      const { error } = await supabase.from('food_cost_mapping').upsert(payload, { onConflict: 'collaborator_name, terminal_id' } as any);
-      
-      if (error) {
-        if (error.code === '42P01') {
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('food_cost_mapping')
+        .update({ contract_name: formData.centro_custo })
+        .eq('collaborator_name', formData.nome)
+        .eq('terminal_id', terminalId)
+        .select();
+
+      if (updateError) {
+        if (updateError.code === '42P01') {
            throw new Error('A tabela food_cost_mapping ainda não foi criada no Supabase.');
         }
-        throw error;
+        throw updateError;
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        const { error: insertError } = await supabase.from('food_cost_mapping').insert([payload]);
+        if (insertError) {
+          if (insertError.code === '42P01') {
+             throw new Error('A tabela food_cost_mapping ainda não foi criada no Supabase.');
+          }
+          throw insertError;
+        }
       }
       
       await fetchEmployees();

@@ -201,15 +201,24 @@ export default function DailyControl() {
         terminal_id: terminalId
       };
 
-      const { error } = await supabase
+      // Tenta UPDATE primeiro; se não existir o registro, faz INSERT
+      const { data: updateData, error: updateError } = await supabase
         .from('daily_attendance')
-        .upsert(payload, { onConflict: 'date, collaborator_name, terminal_id' });
+        .update({ status: payload.status, comment: payload.comment, overtime: payload.overtime })
+        .eq('date', currentDate)
+        .eq('collaborator_name', nome)
+        .eq('terminal_id', terminalId)
+        .select();
 
-      if (error) {
-        if (error.code === '42P01') {
-          throw new Error('A tabela daily_attendance ainda não foi criada no Supabase.');
-        }
-        throw error;
+      if (updateError) {
+        if (updateError.code === '42P01') throw new Error('A tabela daily_attendance ainda não foi criada no Supabase.');
+        throw updateError;
+      }
+
+      // Se nenhuma linha foi atualizada, insere um novo registro
+      if (!updateData || updateData.length === 0) {
+        const { error: insertError } = await supabase.from('daily_attendance').insert([payload]);
+        if (insertError) throw insertError;
       }
 
       setEmployees(prev => prev.map(e => e.nome === nome ? { ...e, status_presenca: payload.status, comment: payload.comment, overtime: payload.overtime } : e));
@@ -226,6 +235,7 @@ export default function DailyControl() {
     
     setImporting(true);
     try {
+      // 1. Busca os dados do dia de origem
       const { data: sourceData, error: sourceError } = await supabase
         .from('daily_attendance')
         .select('*')
@@ -242,7 +252,17 @@ export default function DailyControl() {
         return;
       }
 
-      const upserts = sourceData.map(att => ({
+      // 2. Remove todos os lançamentos já existentes no dia atual para este terminal
+      const { error: deleteError } = await supabase
+        .from('daily_attendance')
+        .delete()
+        .eq('date', currentDate)
+        .eq('terminal_id', terminalId);
+
+      if (deleteError) throw deleteError;
+
+      // 3. Insere os dados do dia de origem com a data atual
+      const inserts = sourceData.map(att => ({
         date: currentDate,
         collaborator_name: att.collaborator_name,
         status: att.status,
@@ -251,11 +271,11 @@ export default function DailyControl() {
         terminal_id: terminalId
       }));
 
-      const { error: upsertError } = await supabase
+      const { error: insertError } = await supabase
         .from('daily_attendance')
-        .upsert(upserts, { onConflict: 'date, collaborator_name, terminal_id' });
+        .insert(inserts);
 
-      if (upsertError) throw upsertError;
+      if (insertError) throw insertError;
       
       alert('Status importados com sucesso!');
       setIsImportModalOpen(false);
@@ -288,15 +308,23 @@ export default function DailyControl() {
     }
     setSavingExtra(true);
     try {
-       // 1. Salva no cost_mapping universal
+       // 1. Salva ou atualiza no cost_mapping (UPDATE + INSERT se não existir)
        const mapPayload = {
          collaborator_name: extraForm.nome,
          contract_name: extraForm.centro_custo,
          terminal_id: terminalId
        };
-       await supabase.from('food_cost_mapping').upsert(mapPayload, { onConflict: 'collaborator_name, terminal_id' } as any);
-       
-       // 2. Insere a presenca no Attendance de hoje
+       const { data: mapUpdate } = await supabase
+         .from('food_cost_mapping')
+         .update({ contract_name: extraForm.centro_custo })
+         .eq('collaborator_name', extraForm.nome)
+         .eq('terminal_id', terminalId)
+         .select();
+       if (!mapUpdate || mapUpdate.length === 0) {
+         await supabase.from('food_cost_mapping').insert([mapPayload]);
+       }
+
+       // 2. Insere ou atualiza presença no Attendance de hoje (UPDATE + INSERT se não existir)
        const attPayload = {
          date: currentDate,
          collaborator_name: extraForm.nome,
@@ -305,7 +333,16 @@ export default function DailyControl() {
          overtime: '',
          terminal_id: terminalId
        };
-       await supabase.from('daily_attendance').upsert(attPayload, { onConflict: 'date, collaborator_name, terminal_id' });
+       const { data: attUpdate } = await supabase
+         .from('daily_attendance')
+         .update({ status: 'Presente', comment: 'Refeição Extra/Visitante', overtime: '' })
+         .eq('date', currentDate)
+         .eq('collaborator_name', extraForm.nome)
+         .eq('terminal_id', terminalId)
+         .select();
+       if (!attUpdate || attUpdate.length === 0) {
+         await supabase.from('daily_attendance').insert([attPayload]);
+       }
 
        alert("Refeição Avulsa Adicionada com Sucesso!");
        setIsExtraOpen(false);
