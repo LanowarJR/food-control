@@ -42,6 +42,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
   // profileLoading: carrega perfil/terminal em background sem bloquear UI
   const [profileLoading, setProfileLoading] = useState(false);
+  const loadedUserId = React.useRef<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -106,14 +107,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       (event, currentSession) => {
         console.log('Providers: Evento:', event, '| Sessão:', !!currentSession);
 
-        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
 
           // Desbloqueia a UI imediatamente — não espera o perfil carregar
           setAuthLoading(false);
 
-          // Carrega perfil em background se logado
-          if (currentSession) {
+          // Carrega perfil em background se logado e se for um usuário diferente do já carregado
+          if (currentSession && loadedUserId.current !== currentSession.user.id) {
+            loadedUserId.current = currentSession.user.id;
             loadProfileAndTerminal(currentSession.user.id);
           }
           return;
@@ -124,6 +126,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           setUserRole(null);
           setActiveTerminal(null);
           setTerminalId(null);
+          loadedUserId.current = null;
           setAuthLoading(false);
           router.replace('/login');
           return;
