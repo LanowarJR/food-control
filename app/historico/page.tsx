@@ -48,6 +48,16 @@ export default function HistoricoPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // --- NEW STATES FOR OCCURRENCES TAB ---
+  const [activeTab, setActiveTab] = useState<'consolidado' | 'ocorrencias'>('consolidado');
+  const [occSearchName, setOccSearchName] = useState('');
+  const [occSearchStatus, setOccSearchStatus] = useState('Excecoes');
+  const [occSearchText, setOccSearchText] = useState('');
+  const [occDateRange, setOccDateRange] = useState('30dias'); // Novo estado de data
+  const [occData, setOccData] = useState<any[]>([]);
+  const [occLoading, setOccLoading] = useState(false);
+  // ----------------------------------------
+
   // Load History from Supabase
   const loadHistory = React.useCallback(async () => {
     if (!terminalId) return;
@@ -78,6 +88,84 @@ export default function HistoricoPage() {
       setLoading(false);
     }
   }, [terminalId]);
+
+  const searchOccurrences = React.useCallback(async () => {
+    if (!terminalId) return;
+    setOccLoading(true);
+    try {
+      let query = supabase
+        .from('daily_attendance')
+        .select('*')
+        .eq('terminal_id', terminalId)
+        .order('date', { ascending: false })
+        .limit(500);
+
+      if (occDateRange !== 'todos') {
+        const dateLimit = new Date();
+        if (occDateRange === '7dias') dateLimit.setDate(dateLimit.getDate() - 7);
+        if (occDateRange === '30dias') dateLimit.setDate(dateLimit.getDate() - 30);
+        if (occDateRange === 'mes') dateLimit.setDate(1); // 1st of current month
+        query = query.gte('date', dateLimit.toISOString().split('T')[0]);
+      }
+
+      if (occSearchName.trim()) {
+        query = query.ilike('collaborator_name', `%${occSearchName.trim()}%`);
+      }
+      
+      if (occSearchStatus === 'Excecoes') {
+        query = query.or('status.neq.Presente,comment.neq.,comment.neq."",overtime.neq.,overtime.neq.""');
+      } else if (occSearchStatus === 'Horas Extras') {
+        query = query.or('overtime.neq.,overtime.neq.""');
+      } else if (occSearchStatus !== 'Todos') {
+        query = query.eq('status', occSearchStatus);
+      }
+
+      if (occSearchText.trim()) {
+        query = query.or(`comment.ilike.%${occSearchText.trim()}%,overtime.ilike.%${occSearchText.trim()}%`);
+      }
+
+      const { data: occDataResult, error } = await query;
+      
+      if (error && error.code === '42703') {
+        let fallbackQuery = supabase
+          .from('daily_attendance')
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(500);
+          
+        if (occDateRange !== 'todos') {
+          const dateLimit = new Date();
+          if (occDateRange === '7dias') dateLimit.setDate(dateLimit.getDate() - 7);
+          if (occDateRange === '30dias') dateLimit.setDate(dateLimit.getDate() - 30);
+          if (occDateRange === 'mes') dateLimit.setDate(1);
+          fallbackQuery = fallbackQuery.gte('date', dateLimit.toISOString().split('T')[0]);
+        }
+
+        if (occSearchName.trim()) fallbackQuery = fallbackQuery.ilike('collaborator_name', `%${occSearchName.trim()}%`);
+        if (occSearchStatus === 'Excecoes') fallbackQuery = fallbackQuery.or('status.neq.Presente,comment.neq.,comment.neq."",overtime.neq.,overtime.neq.""');
+        else if (occSearchStatus === 'Horas Extras') fallbackQuery = fallbackQuery.or('overtime.neq.,overtime.neq.""');
+        else if (occSearchStatus !== 'Todos') fallbackQuery = fallbackQuery.eq('status', occSearchStatus);
+        if (occSearchText.trim()) fallbackQuery = fallbackQuery.or(`comment.ilike.%${occSearchText.trim()}%,overtime.ilike.%${occSearchText.trim()}%`);
+        
+        const { data: altData } = await fallbackQuery;
+        setOccData(altData || []);
+      } else if (error) {
+        console.warn('Erro ao buscar ocorrências:', error.message);
+      } else {
+        setOccData(occDataResult || []);
+      }
+    } catch (err) {
+      console.error('Fallback occ error:', err);
+    } finally {
+      setOccLoading(false);
+    }
+  }, [terminalId, occSearchName, occSearchStatus, occSearchText, occDateRange]);
+
+  useEffect(() => {
+    if (activeTab === 'ocorrencias' && occData.length === 0) {
+      searchOccurrences();
+    }
+  }, [activeTab, searchOccurrences, occData.length]);
 
   const openDayDetails = async (date: string) => {
     setSelectedDate(date);
@@ -291,13 +379,39 @@ export default function HistoricoPage() {
 
   return (
     <Layout>
-      {/* Filters Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10 print:hidden">
+      {/* Header and Tabs */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 print:hidden">
         <div className="space-y-1">
-          <span className="font-inter text-[11px] font-bold uppercase tracking-[0.2em] text-[#004354]">Visão Estratégica</span>
-          <h2 className="font-manrope text-3xl font-extrabold text-[#111d23] tracking-tight">Análise de Consumo</h2>
+          <span className="font-inter text-[11px] font-bold uppercase tracking-[0.2em] text-[#004354]">Histórico e Auditoria</span>
+          <h2 className="font-manrope text-3xl font-extrabold text-[#111d23] tracking-tight">Painel de Registros</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-3 bg-slate-100 p-2 rounded-xl border border-slate-200/50">
+        <div className="flex items-center bg-slate-200/50 p-1.5 rounded-xl w-full md:w-auto shadow-inner">
+          <button 
+            onClick={() => setActiveTab('consolidado')}
+            className={cn(
+              "flex-1 md:flex-none px-6 py-2.5 rounded-lg font-bold text-[11px] md:text-xs uppercase tracking-widest transition-all",
+              activeTab === 'consolidado' ? "bg-white text-[#004354] shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            Resumo Consolidado
+          </button>
+          <button 
+            onClick={() => setActiveTab('ocorrencias')}
+            className={cn(
+              "flex-1 md:flex-none px-6 py-2.5 rounded-lg font-bold text-[11px] md:text-xs uppercase tracking-widest transition-all",
+              activeTab === 'ocorrencias' ? "bg-white text-[#004354] shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            Busca de Ocorrências
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'consolidado' && (
+        <>
+      {/* Filters Header (Consolidated) */}
+      <div className="flex flex-col md:flex-row md:items-center justify-end gap-6 mb-8 print:hidden">
+        <div className="flex flex-wrap items-center gap-3 bg-slate-100 p-2 rounded-xl border border-slate-200/50 w-full md:w-auto">
           <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-sm border border-slate-200/50">
             <Filter className="w-4 h-4 text-[#004354]" />
             <select 
@@ -557,6 +671,157 @@ export default function HistoricoPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
+
+      {activeTab === 'ocorrencias' && (
+        <div className="animate-in fade-in duration-300">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/50 shadow-sm mb-6 flex flex-col md:flex-row gap-4 items-end">
+            <div className="w-full md:flex-1 relative">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Colaborador / Visitante</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input 
+                  type="text"
+                  placeholder="Nome do colaborador..."
+                  value={occSearchName}
+                  onChange={e => setOccSearchName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && searchOccurrences()}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200/50 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#004354]/20 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="w-full md:w-48">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Status da Frequência</label>
+              <select 
+                value={occSearchStatus}
+                onChange={e => setOccSearchStatus(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200/50 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#004354]/20 cursor-pointer"
+              >
+                <option value="Todos">Todos os Status</option>
+                <option value="Excecoes">Apenas Ocorrências</option>
+                <option value="Horas Extras">Com Horas Extras</option>
+                <option value="Falta">Faltas</option>
+                <option value="Atraso">Atrasos</option>
+                <option value="Férias">Férias</option>
+                <option value="Atestado">Atestados</option>
+              </select>
+            </div>
+
+            <div className="w-full md:w-40">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Período</label>
+              <select 
+                value={occDateRange}
+                onChange={e => setOccDateRange(e.target.value)}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200/50 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#004354]/20 cursor-pointer"
+              >
+                <option value="7dias">Últimos 7 dias</option>
+                <option value="30dias">Últimos 30 dias</option>
+                <option value="mes">Este Mês</option>
+                <option value="todos">Todo o Período</option>
+              </select>
+            </div>
+
+            <div className="w-full md:flex-1 relative">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Observações / H. Extras</label>
+              <div className="relative">
+                <FileText className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input 
+                  type="text"
+                  placeholder="Ex: 2h, sem pimenta, advertência..."
+                  value={occSearchText}
+                  onChange={e => setOccSearchText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && searchOccurrences()}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200/50 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-[#004354]/20 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            <button 
+              onClick={searchOccurrences}
+              className="w-full md:w-auto bg-[#004354] hover:bg-[#005c72] text-white px-8 py-3 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+            >
+              {occLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              Pesquisar
+            </button>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200/50 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-manrope text-sm font-extrabold text-[#111d23]">Resultados da Busca</h3>
+              <span className="text-xs font-bold text-slate-400">{occData.length} registros listados (últimos 500)</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/30">
+                    <th className="px-6 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Data</th>
+                    <th className="px-6 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Colaborador</th>
+                    <th className="px-6 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 text-center">Status</th>
+                    <th className="px-6 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400 text-center">H. Extra</th>
+                    <th className="px-6 py-4 font-inter text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Observações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {occLoading ? (
+                    <tr>
+                      <td colSpan={5} className="py-20 text-center">
+                        <RefreshCw className="w-8 h-8 text-[#004354] animate-spin mx-auto opacity-20" />
+                      </td>
+                    </tr>
+                  ) : occData.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-20 text-center">
+                        <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                        <p className="text-slate-400 font-bold italic">Nenhuma ocorrência encontrada para os filtros atuais.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    occData.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <p className="text-sm font-bold text-[#111d23]">
+                            {new Date(item.date + 'T12:00:00Z').toLocaleDateString('pt-BR')}
+                          </p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-bold text-[#111d23]">{item.collaborator_name}</p>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={cn(
+                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                            item.status === 'Presente' ? "bg-teal-50 text-teal-700" :
+                            item.status === 'Atraso' ? "bg-amber-50 text-amber-700" :
+                            item.status === 'Falta' ? "bg-red-50 text-red-600" :
+                            "bg-purple-50 text-purple-700"
+                          )}>
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={cn(
+                            "text-sm font-extrabold",
+                            item.overtime ? "text-[#004354]" : "text-slate-300"
+                          )}>
+                            {item.overtime || '-'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-medium text-slate-600 italic">
+                            {item.comment || <span className="text-slate-300">Nenhuma observação</span>}
+                          </p>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Audit Summary Modal */}
       {isModalOpen && (
