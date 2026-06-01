@@ -32,9 +32,20 @@ export default function DailyControl() {
   const [error, setError] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   
-  // Date State
-  const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [importSourceDate, setImportSourceDate] = useState(() => getYesterdayDateStr(new Date().toISOString().split('T')[0]));
+  const [currentDate, setCurrentDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('foodcontrol_selected_date') || new Date().toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('foodcontrol_selected_date', currentDate);
+    }
+  }, [currentDate]);
+
+  const [importSourceDate, setImportSourceDate] = useState(() => getYesterdayDateStr(currentDate));
   const [importing, setImporting] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 

@@ -31,12 +31,23 @@ export default function PedidosPage() {
   const [prot2Qty, setProt2Qty] = useState(0);
   
   const [obs, setObs] = useState('');
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('foodcontrol_selected_date') || new Date().toISOString().split('T')[0];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('foodcontrol_selected_date', selectedDate);
+    }
+  }, [selectedDate]);
   const fetchRealData = useCallback(async () => {
     if (!terminalId) return;
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = selectedDate;
 
       // 1. Fetch base collaborators
       const { data: colabData, error: colabError } = await supabase
@@ -123,7 +134,7 @@ export default function PedidosPage() {
     } finally {
       setLoading(false);
     }
-  }, [terminalId]);
+  }, [terminalId, selectedDate]);
 
   useEffect(() => {
     fetchRealData();
@@ -139,7 +150,7 @@ export default function PedidosPage() {
 
     setSaving(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = selectedDate;
       const payload = {
         date: today,
         meals: prot1Qty + prot2Qty || totalPresentes,
@@ -202,7 +213,13 @@ export default function PedidosPage() {
             <h1 className="text-2xl md:text-3xl font-black text-[#111d23] font-manrope tracking-tight mb-1">Fechamento do Pedido</h1>
             <p className="text-xs md:text-sm text-slate-500 font-medium">Resumo em tempo real dos Presentes e consolidação.</p>
           </div>
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex gap-3 w-full md:w-auto items-center">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-white text-slate-700 px-4 py-3 md:py-2.5 rounded-xl border border-slate-200/50 shadow-sm font-inter text-sm outline-none focus:ring-2 focus:ring-[#004354]/20"
+            />
             <button 
               onClick={fetchRealData}
               className="flex-1 md:flex-none justify-center bg-white text-slate-700 px-5 py-3 md:py-2.5 rounded-xl border border-slate-200/50 shadow-sm font-inter font-bold text-[10px] md:text-xs uppercase tracking-widest hover:bg-slate-50 flex items-center gap-2"
